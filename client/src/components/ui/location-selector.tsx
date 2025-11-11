@@ -280,7 +280,7 @@ export function LocationSelector({
                 <MapPin className="h-3 w-3" />
                 City/Location {cities.length > 0 && <span className="text-xs opacity-70">({cities.length} cities)</span>}
               </Label>
-              <Popover>
+              <Popover modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -303,6 +303,7 @@ export function LocationSelector({
                     <CommandInput placeholder="Search city..." />
                     <CommandEmpty>No city found.</CommandEmpty>
                     <CommandList className="max-h-[300px] overflow-y-auto">
+                      {/* Workaround: manually update scrollTop on wheel */}
                       {cities.map((c) => (
                         <CommandItem
                           key={c.id}
@@ -320,6 +321,15 @@ export function LocationSelector({
                           {c.name}
                         </CommandItem>
                       ))}
+                      <script dangerouslySetInnerHTML={{__html:`
+                        document.querySelectorAll('[cmdk-list]').forEach(function(list){
+                          list.addEventListener('wheel', function(e){
+                            if (e.deltaY !== 0) {
+                              list.scrollTop += e.deltaY;
+                            }
+                          });
+                        });
+                      `}} />
                     </CommandList>
                   </Command>
                 </PopoverContent>
