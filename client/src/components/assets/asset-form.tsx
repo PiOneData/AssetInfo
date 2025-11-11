@@ -99,35 +99,12 @@ const assetFormSchema = insertAssetSchema.extend({
   }
 
   // Hardware-specific validation
-  if (data.type === 'Hardware') {
-    if (!data.serialNumber) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Serial number is required for hardware assets for warranty and tracking",
-        path: ["serialNumber"],
-      });
-    }
-    if (!data.assignedUserName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Assigned user name is required for hardware assets",
-        path: ["assignedUserName"],
-      });
-    }
-    if (!data.assignedUserEmail) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Assigned user email is required for hardware assets",
-        path: ["assignedUserEmail"],
-      });
-    }
-    if (!data.assignedUserEmployeeId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Assigned user employee ID is required for hardware assets",
-        path: ["assignedUserEmployeeId"],
-      });
-    }
+  if (data.type === 'Hardware' && !data.serialNumber) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Serial number is required for hardware assets for warranty and tracking",
+      path: ["serialNumber"],
+    });
   }
 
   // Software-specific validation with enhanced checks
@@ -263,6 +240,13 @@ function ComboSelect({ value, onValueChange, type, placeholder, label, dataTestI
       return response.json() as Promise<MasterData>;
     },
     onSuccess: (newMasterData: MasterData) => {
+      queryClient.setQueryData<MasterData[]>(
+        ['/api/master', type],
+        (old = []) => {
+          const exists = old.some((item) => item.id === newMasterData.id);
+          return exists ? old : [...old, newMasterData];
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/master', type] });
       onValueChange(newMasterData.value);
       setShowAddDialog(false);
@@ -494,6 +478,8 @@ export function AssetForm({ isOpen, onClose, onSubmit, asset, isLoading }: Asset
       state: asset.state || "",
       city: asset.city || "",
         assignedUserName: asset.assignedUserName || "",
+        assignedUserEmail: asset.assignedUserEmail || "",
+        assignedUserEmployeeId: asset.assignedUserEmployeeId || "",
         purchaseDate: asset.purchaseDate ? new Date(asset.purchaseDate).toISOString().split('T')[0] : "",
         purchaseCost: asset.purchaseCost ? Number(asset.purchaseCost) : undefined,
         warrantyExpiry: asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toISOString().split('T')[0] : "",
@@ -524,6 +510,8 @@ export function AssetForm({ isOpen, onClose, onSubmit, asset, isLoading }: Asset
         serialNumber: "",
         location: "",
         assignedUserName: "",
+        assignedUserEmail: "",
+        assignedUserEmployeeId: "",
         purchaseDate: "",
         purchaseCost: undefined,
         warrantyExpiry: "",
@@ -675,9 +663,6 @@ export function AssetForm({ isOpen, onClose, onSubmit, asset, isLoading }: Asset
       case 'country':
         return false; // Made optional as per user request
       case 'serialNumber':
-      case 'assignedUserName':
-      case 'assignedUserEmail':
-      case 'assignedUserEmployeeId':
         return currentType === 'Hardware';
       case 'softwareName':
       case 'version':

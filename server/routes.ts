@@ -3157,12 +3157,15 @@ TENANT_NAME=${tenant.name}
       'model',
       'serial_number',
       'location',
-      'assigned_user_email',
+      'country',
+      'state',
+      'city',
       'assigned_user_name',
+      'assigned_user_email',
+      'assigned_user_employee_id',
       'purchase_date',
       'purchase_cost',
       'warranty_expiry',
-      'specifications',
       'notes',
       'software_name',
       'version',
@@ -3180,20 +3183,23 @@ TENANT_NAME=${tenant.name}
     const sampleData = [
       [
         'MacBook Pro 16"',
-        'hardware',
+        'Hardware',
         'deployed',
-        'laptop',
+        'Laptop',
         'Apple',
-        'MacBook Pro',
+        'MacBook Pro 16',
         'A1234567890',
-        'Office Floor 2',
-        'john.doe@techcorp.com',
+        'Headquarters - Floor 2',
+        'United States',
+        'California',
+        'San Francisco',
         'John Doe',
+        'john.doe@techcorp.com',
+        'EMP1001',
         '2024-01-15',
         '2499.00',
         '2027-01-15',
-        '{"ram":"16GB","storage":"512GB SSD","processor":"M1 Pro"}',
-        'High-performance laptop for development team',
+        'High-performance laptop for engineering team',
         '',
         '',
         '',
@@ -3203,25 +3209,28 @@ TENANT_NAME=${tenant.name}
         'Apple Inc',
         'sales@apple.com',
         '+1-800-275-2273',
-        'Apple Inc',
-        ''
+        'TechCorp Inc',
+        '22AAAAA0000A1Z5'
       ],
       [
         'Dell OptiPlex 7090',
-        'hardware',
+        'Hardware',
         'in-stock',
-        'desktop',
+        'Desktop',
         'Dell',
         'OptiPlex 7090',
         'D9876543210',
-        'Storage Room A',
+        'Warehouse A',
+        'United States',
+        'Texas',
+        'Austin',
+        '',
         '',
         '',
         '2024-02-01',
         '899.00',
         '2027-02-01',
-        '{"ram":"8GB","storage":"256GB SSD","processor":"Intel i5"}',
-        'Desktop computer for office use',
+        'Spare desktop ready for deployment',
         '',
         '',
         '',
@@ -3231,81 +3240,59 @@ TENANT_NAME=${tenant.name}
         'Dell Technologies',
         'support@dell.com',
         '+1-800-624-9896',
-        'Dell Inc',
-        ''
+        'TechCorp Inc',
+        '22AAAAA0000A1Z5'
       ],
       [
         'Microsoft Office 365',
-        'software',
+        'Software',
         'deployed',
-        'productivity',
+        'Productivity',
         'Microsoft',
-        'Office 365',
+        'Office 365 Business',
         '',
-        'Cloud',
+        'Cloud Subscription',
+        'United States',
+        'Washington',
+        'Seattle',
+        '',
         '',
         '',
         '2024-02-01',
         '150.00',
         '2025-02-01',
-        '{"edition":"Business Premium","users":"unlimited"}',
-        'Annual subscription for productivity suite',
+        'Annual subscription for collaboration suite',
         'Microsoft Office 365',
         '2024',
         'subscription',
         'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX',
         '50',
         '2025-02-01',
-        'Microsoft',
+        'Microsoft Corporation',
         'support@microsoft.com',
         '+1-800-642-7676',
-        'Microsoft Corporation',
-        ''
-      ],
-      [
-        'Adobe Creative Suite',
-        'software',
-        'in-repair',
-        'design',
-        'Adobe',
-        'Creative Suite',
-        '',
-        'IT Department',
-        '',
-        '',
-        '2023-06-15',
-        '2400.00',
-        '2024-06-15',
-        '{"edition":"Premium","applications":"Photoshop,Illustrator,InDesign"}',
-        'Design software - license renewal needed',
-        'Adobe Creative Suite',
-        '2023',
-        'perpetual',
-        'ADOBE-XXXXX-XXXXX-XXXXX',
-        '10',
-        '',
-        'Adobe Inc',
-        'licensing@adobe.com',
-        '+1-800-833-6687',
-        'Adobe Inc',
-        ''
+        'TechCorp Inc',
+        '22AAAAA0000A1Z5'
       ],
       [
         'HP LaserJet Pro 400',
-        'peripheral',
+        'Peripherals',
         'deployed',
-        'printer',
+        'Printer',
         'HP',
         'LaserJet Pro 400',
         'HP123456789',
-        'Office Floor 1',
+        'Finance Wing',
+        'United States',
+        'New York',
+        'New York City',
+        '',
         '',
         '',
         '2023-08-20',
         '299.00',
         '2026-08-20',
-        '{"type":"laser","color":"monochrome","speed":"35ppm"}',
-        'Network printer for general office use',
+        'Shared monochrome network printer',
         '',
         '',
         '',
@@ -3315,64 +3302,39 @@ TENANT_NAME=${tenant.name}
         'HP Inc',
         'support@hp.com',
         '+1-800-474-6836',
-        'HP Inc',
-        ''
-      ],
-      [
-        'Logitech Wireless Mouse',
-        'peripheral',
-        'disposed',
-        'mouse',
-        'Logitech',
-        'MX Master 3',
-        'LOG987654321',
-        'IT Storage',
-        '',
-        '',
-        '2022-03-10',
-        '99.00',
-        '2025-03-10',
-        '{"type":"wireless","buttons":"7","battery":"rechargeable"}',
-        'End of life - battery no longer holds charge',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'Logitech',
-        'support@logitech.com',
-        '+1-646-454-3200',
-        'Logitech International',
-        ''
+        'TechCorp Inc',
+        '22AAAAA0000A1Z5'
       ],
       [
         'Office Furniture Desk',
-        'others',
+        'Others',
         'deployed',
-        'furniture',
+        'Furniture',
         'IKEA',
         'BEKANT',
         'IKEA123456',
-        'Office Floor 2',
-        'jane.smith@techcorp.com',
+        'Headquarters - Floor 3',
+        'United States',
+        'California',
+        'San Jose',
         'Jane Smith',
+        'jane.smith@techcorp.com',
+        'EMP1042',
         '2023-09-15',
         '199.00',
         '2028-09-15',
-        '{"dimensions":"160x80cm","color":"white","material":"particleboard"}',
-        'Office desk for employee workspace',
+        'Assigned workstation for design team member',
         '',
         '',
         '',
         '',
         '',
         '',
-        'IKEA',
+        'IKEA Inc',
         'info@ikea.com',
         '+1-888-888-4532',
-        'IKEA Inc',
-        ''
+        'TechCorp Inc',
+        '22AAAAA0000A1Z5'
       ]
     ];
 
@@ -3429,8 +3391,8 @@ TENANT_NAME=${tenant.name}
           }
           if (!record.type?.trim()) {
             errors.push("Type is required");
-          } else if (!['hardware', 'software', 'peripheral', 'others'].includes(record.type.trim().toLowerCase())) {
-            errors.push("Type must be hardware, software, peripheral, or others");
+          } else if (!['hardware', 'software', 'peripheral', 'peripherals', 'others'].includes(record.type.trim().toLowerCase())) {
+            errors.push("Type must be hardware, software, peripherals, or others");
           }
           if (!record.status?.trim()) {
             errors.push("Status is required");
@@ -3439,7 +3401,9 @@ TENANT_NAME=${tenant.name}
           }
 
           // Type-specific validation
-          if (record.type?.trim().toLowerCase() === 'software' && !record.software_name?.trim()) {
+          const normalizedType = record.type?.trim().toLowerCase();
+
+          if (normalizedType === 'software' && !record.software_name?.trim()) {
             errors.push("Software name is required for software assets");
           }
 
@@ -3456,14 +3420,15 @@ TENANT_NAME=${tenant.name}
 
           // Number validation
           if (record.purchase_cost && record.purchase_cost.trim()) {
-            const cost = parseFloat(record.purchase_cost);
+            const sanitizedCost = record.purchase_cost.replace(/,/g, "");
+            const cost = parseFloat(sanitizedCost);
             if (isNaN(cost) || cost < 0) {
               errors.push("Purchase cost must be a valid positive number");
             }
           }
 
           if (record.used_licenses && record.used_licenses.trim()) {
-            const licenses = parseInt(record.used_licenses);
+            const licenses = parseInt(record.used_licenses, 10);
             if (isNaN(licenses) || licenses < 0) {
               errors.push("Used licenses must be a valid non-negative integer");
             }
@@ -3471,9 +3436,18 @@ TENANT_NAME=${tenant.name}
 
           // Build asset object if no errors
           if (errors.length === 0) {
+            const typeMap: Record<string, string> = {
+              hardware: "Hardware",
+              software: "Software",
+              peripheral: "Peripherals",
+              peripherals: "Peripherals",
+              others: "Others",
+            };
+            const mappedType = normalizedType ? (typeMap[normalizedType] || record.type.trim()) : record.type.trim();
+
             const assetData: any = {
               name: record.name.trim(),
-              type: record.type.trim().toLowerCase(), // Normalize to lowercase
+              type: mappedType,
               status: record.status.trim().toLowerCase(), // Normalize to lowercase
               tenantId: req.user!.tenantId,
               createdBy: req.user!.userId
@@ -3482,7 +3456,9 @@ TENANT_NAME=${tenant.name}
             // Add optional fields
             const optionalFields = [
               'category', 'manufacturer', 'model', 'serial_number', 'location',
-              'assigned_user_name', 'notes', 'software_name', 'version',
+              'country', 'state', 'city',
+              'assigned_user_name', 'assigned_user_email', 'assigned_user_employee_id',
+              'notes', 'software_name', 'version',
               'license_type', 'license_key', 'vendor_name', 'vendor_email',
               'vendor_phone', 'company_name', 'company_gst_number'
             ];
@@ -3491,6 +3467,8 @@ TENANT_NAME=${tenant.name}
               if (record[field] && record[field].trim()) {
                 assetData[field === 'serial_number' ? 'serialNumber' : 
                           field === 'assigned_user_name' ? 'assignedUserName' :
+                          field === 'assigned_user_email' ? 'assignedUserEmail' :
+                          field === 'assigned_user_employee_id' ? 'assignedUserEmployeeId' :
                           field === 'software_name' ? 'softwareName' :
                           field === 'license_type' ? 'licenseType' :
                           field === 'license_key' ? 'licenseKey' :
@@ -3516,10 +3494,14 @@ TENANT_NAME=${tenant.name}
 
             // Handle numbers
             if (record.purchase_cost && record.purchase_cost.trim()) {
-              assetData.purchaseCost = record.purchase_cost.trim();
+              const sanitizedCost = record.purchase_cost.replace(/,/g, "").trim();
+              const cost = parseFloat(sanitizedCost);
+              if (!isNaN(cost)) {
+                assetData.purchaseCost = cost;
+              }
             }
             if (record.used_licenses && record.used_licenses.trim()) {
-              assetData.usedLicenses = parseInt(record.used_licenses);
+              assetData.usedLicenses = parseInt(record.used_licenses, 10);
             }
 
             // Handle JSON specifications
@@ -4010,14 +3992,29 @@ TENANT_NAME=${tenant.name}
 
   app.post("/api/master", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
     try {
+      const rawType = typeof req.body?.type === "string" ? req.body.type.trim() : "";
+      const rawValue = typeof req.body?.value === "string" ? req.body.value.trim() : "";
+      const rawDescription = typeof req.body?.description === "string" ? req.body.description.trim() : "";
+      const metadata = typeof req.body?.metadata === "object" ? req.body.metadata : undefined;
+
+      if (!rawType || !rawValue) {
+        return res.status(400).json({ message: "Type and value are required" });
+      }
+
       const masterDataInput = insertMasterDataSchema.parse({
-        ...req.body,
+        type: rawType,
+        value: rawValue,
+        description: rawDescription || undefined,
+        metadata,
         tenantId: req.user!.tenantId,
+        createdBy: req.user!.userId,
+        isActive: true,
       });
 
       const masterData = await storage.addMasterData(masterDataInput);
       res.status(201).json(masterData);
     } catch (error) {
+      console.error("Master data creation error:", error);
       res.status(400).json({ message: "Invalid master data" });
     }
   });
