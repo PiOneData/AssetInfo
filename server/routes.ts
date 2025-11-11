@@ -4223,25 +4223,19 @@ TENANT_NAME=${tenant.name}
       // Filter and prioritize major cities over localities
       // If we have too many results (>100), likely contains localities - filter to major cities only
       if (cities.length > 100) {
-        // Prioritize cities with shorter names (major cities tend to have simpler names)
-        // and sort alphabetically for better UX
         cities = cities
           .filter((city: any) => {
             const name = city.name.toLowerCase();
-            // Filter out obvious localities (containing common locality keywords)
             const localityKeywords = ['village', 'colony', 'nagar', 'puram', 'pet', 'pally', 'patti', 'pur', 'guda'];
             return !localityKeywords.some(keyword => name.endsWith(keyword));
           })
           .sort((a: any, b: any) => {
-            // Prioritize shorter names (major cities)
             if (a.name.length !== b.name.length) {
               return a.name.length - b.name.length;
             }
-            // Then alphabetically
             return a.name.localeCompare(b.name);
-          })
-          .slice(0, 50); // Limit to top 50 major cities
-          
+          });
+        // No limit: return all major cities
         console.log(`[Cities API] Filtered ${selectedState.name} from ${bestMatch.cities.length} to ${cities.length} major cities`);
       }
       

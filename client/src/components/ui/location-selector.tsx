@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, Globe, Flag, Building2, Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -302,7 +302,7 @@ export function LocationSelector({
                   <Command>
                     <CommandInput placeholder="Search city..." />
                     <CommandEmpty>No city found.</CommandEmpty>
-                    <CommandGroup className="max-h-[300px] overflow-auto">
+                    <CommandList className="max-h-[300px] overflow-y-auto">
                       {cities.map((c) => (
                         <CommandItem
                           key={c.id}
@@ -320,7 +320,7 @@ export function LocationSelector({
                           {c.name}
                         </CommandItem>
                       ))}
-                    </CommandGroup>
+                    </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
