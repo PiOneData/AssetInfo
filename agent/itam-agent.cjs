@@ -111,6 +111,83 @@ async function getSerial() {
   return null;
 }
 
+async function getManufacturer() {
+  const platform = os.platform();
+
+  if (platform === "darwin") {
+    return "Apple Inc.";
+  }
+
+  if (platform === "win32") {
+    const wmic = await execWithTimeout("wmic", ["computersystem", "get", "manufacturer"], CMD_TIMEOUT_MS);
+    if (wmic) {
+      const lines = wmic.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const value = lines.find((line) => line && line.toLowerCase() !== "manufacturer");
+      if (value) return value;
+    }
+    const ps = await execWithTimeout(
+      "powershell",
+      ["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Manufacturer"],
+      CMD_TIMEOUT_MS
+    );
+    if (ps) return ps.trim() || null;
+    return null;
+  }
+
+  if (platform === "linux") {
+    const sysVendor = await execShell("cat /sys/class/dmi/id/sys_vendor 2>/dev/null", CMD_TIMEOUT_MS);
+    if (sysVendor) return sysVendor.trim() || null;
+    const dmidecode = await execShell("dmidecode -s system-manufacturer 2>/dev/null", CMD_TIMEOUT_MS);
+    if (dmidecode) return dmidecode.trim() || null;
+    const hostctl = await execShell(
+      "hostnamectl 2>/dev/null | grep -i 'Hardware Vendor' | sed 's/.*://'",
+      CMD_TIMEOUT_MS
+    );
+    if (hostctl) return hostctl.trim() || null;
+  }
+
+  return null;
+}
+
+async function getModel() {
+  const platform = os.platform();
+
+  if (platform === "darwin") {
+    const model = await execShell("sysctl -n hw.model", CMD_TIMEOUT_MS);
+    return model?.trim() || null;
+  }
+
+  if (platform === "win32") {
+    const wmic = await execWithTimeout("wmic", ["computersystem", "get", "model"], CMD_TIMEOUT_MS);
+    if (wmic) {
+      const lines = wmic.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const value = lines.find((line) => line && line.toLowerCase() !== "model");
+      if (value) return value;
+    }
+    const ps = await execWithTimeout(
+      "powershell",
+      ["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Model"],
+      CMD_TIMEOUT_MS
+    );
+    if (ps) return ps.trim() || null;
+    return null;
+  }
+
+  if (platform === "linux") {
+    const productName = await execShell("cat /sys/class/dmi/id/product_name 2>/dev/null", CMD_TIMEOUT_MS);
+    if (productName) return productName.trim() || null;
+    const dmidecode = await execShell("dmidecode -s system-product-name 2>/dev/null", CMD_TIMEOUT_MS);
+    if (dmidecode) return dmidecode.trim() || null;
+    const hostctl = await execShell(
+      "hostnamectl 2>/dev/null | grep -i 'Hardware Model' | sed 's/.*://'",
+      CMD_TIMEOUT_MS
+    );
+    if (hostctl) return hostctl.trim() || null;
+  }
+
+  return null;
+}
+
 function httpPostJson(urlStr, payload) {
   return new Promise((resolve, reject) => {
     try {
@@ -149,6 +226,8 @@ function httpPostJson(urlStr, payload) {
   try {
     const hostname = os.hostname();
     const serial = await getSerial();
+    const manufacturer = await getManufacturer();
+    const model = await getModel();
     const username = getUsername();
     const ips = getIPs();
     const uptimeSeconds = Math.floor(os.uptime());
@@ -165,6 +244,8 @@ function httpPostJson(urlStr, payload) {
     const payload = {
       hostname,
       serial,
+      manufacturer,
+      model,
       os: { name: osName, version: osVersion },
       username,
       ips,

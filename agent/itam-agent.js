@@ -17,17 +17,96 @@ function safe(cmd) {
   catch { return ""; }
 }
 function getSerial() {
-  if (process.platform === "darwin") {
+  const platform = process.platform;
+
+  if (platform === "darwin") {
     const s = safe("system_profiler SPHardwareDataType | awk -F': ' '/Serial/ {print $2; exit}'");
     return s || null;
   }
-  if (process.platform === "win32") {
-    const ps = `powershell -NoProfile -Command "(Get-CimInstance -ClassName Win32_BIOS).SerialNumber"`;
-    const s = safe(ps);
-    return s || null;
+
+  if (platform === "win32") {
+    const wmic = safe("wmic bios get serialnumber");
+    if (wmic) {
+      const lines = wmic.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const value = lines.find((line) => line && line.toLowerCase() !== "serialnumber");
+      if (value) return value;
+    }
+    const ps = safe('powershell -NoProfile -Command "(Get-CimInstance -ClassName Win32_BIOS).SerialNumber"');
+    if (ps) return ps.trim() || null;
+    return null;
   }
-  const s = safe("cat /sys/class/dmi/id/product_serial");
-  return s || null;
+
+  if (platform === "linux") {
+    const sysSerial = safe("cat /sys/class/dmi/id/product_serial 2>/dev/null");
+    if (sysSerial) return sysSerial.trim() || null;
+    const dmidecode = safe("dmidecode -s system-serial-number 2>/dev/null");
+    if (dmidecode) return dmidecode.trim() || null;
+  }
+
+  return null;
+}
+
+function getManufacturer() {
+  const platform = process.platform;
+
+  if (platform === "darwin") {
+    return "Apple Inc.";
+  }
+
+  if (platform === "win32") {
+    const wmic = safe("wmic computersystem get manufacturer");
+    if (wmic) {
+      const lines = wmic.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const value = lines.find((line) => line && line.toLowerCase() !== "manufacturer");
+      if (value) return value;
+    }
+    const ps = safe('powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).Manufacturer"');
+    if (ps) return ps.trim() || null;
+    return null;
+  }
+
+  if (platform === "linux") {
+    const sysVendor = safe("cat /sys/class/dmi/id/sys_vendor 2>/dev/null");
+    if (sysVendor) return sysVendor.trim() || null;
+    const dmidecode = safe("dmidecode -s system-manufacturer 2>/dev/null");
+    if (dmidecode) return dmidecode.trim() || null;
+    const hostctl = safe("hostnamectl 2>/dev/null | grep -i 'Hardware Vendor' | sed 's/.*://'");
+    if (hostctl) return hostctl.trim() || null;
+  }
+
+  return null;
+}
+
+function getModel() {
+  const platform = process.platform;
+
+  if (platform === "darwin") {
+    const model = safe("sysctl -n hw.model");
+    return model || null;
+  }
+
+  if (platform === "win32") {
+    const wmic = safe("wmic computersystem get model");
+    if (wmic) {
+      const lines = wmic.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const value = lines.find((line) => line && line.toLowerCase() !== "model");
+      if (value) return value;
+    }
+    const ps = safe('powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).Model"');
+    if (ps) return ps.trim() || null;
+    return null;
+  }
+
+  if (platform === "linux") {
+    const productName = safe("cat /sys/class/dmi/id/product_name 2>/dev/null");
+    if (productName) return productName.trim() || null;
+    const dmidecode = safe("dmidecode -s system-product-name 2>/dev/null");
+    if (dmidecode) return dmidecode.trim() || null;
+    const hostctl = safe("hostnamectl 2>/dev/null | grep -i 'Hardware Model' | sed 's/.*://'");
+    if (hostctl) return hostctl.trim() || null;
+  }
+
+  return null;
 }
 function getIps() {
   const nets = os.networkInterfaces();
@@ -45,6 +124,8 @@ function getIps() {
 const payload = {
   hostname: os.hostname(),
   serial: getSerial(),
+  manufacturer: getManufacturer(),
+  model: getModel(),
   os: { name: process.platform === "darwin" ? "macOS" : process.platform, version: os.release() },
   username: os.userInfo().username,
   ips: getIps(),
