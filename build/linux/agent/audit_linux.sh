@@ -4163,6 +4163,8 @@ else
 	ITAM_SERIAL="$system_serial"
 	ITAM_OS_NAME="$system_os_name"
 	ITAM_OS_VERSION="$system_os_version"
+	ITAM_MANUFACTURER="$system_manufacturer"
+	ITAM_MODEL="$system_model"
 	
 	# Get username (like Mac/Windows implementations)
 	ITAM_USERNAME=$(whoami 2>/dev/null || echo "unknown")
@@ -4214,6 +4216,8 @@ else
 {
   "hostname": "$ITAM_HOSTNAME",
   "serial": "$ITAM_SERIAL",
+  "manufacturer": "$ITAM_MANUFACTURER",
+  "model": "$ITAM_MODEL",
   "enrollmentToken": "$ENROLLMENT_TOKEN",
   "os": {
     "name": "$ITAM_OS_NAME",

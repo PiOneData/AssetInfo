@@ -2405,6 +2405,8 @@ $ITAM_OS_NAME = $result.sys.os_name
 $ITAM_OS_VERSION = $result.sys.os_version
 $ITAM_USERNAME = $result.sys.username
 $ITAM_IP = $result.sys.ip
+$ITAM_MANUFACTURER = $result.sys.manufacturer
+$ITAM_MODEL = $result.sys.model
 
 # Now convert to JSON for OpenAudit submission
 $result = $result | ConvertTo-Json
@@ -2483,6 +2485,8 @@ if ($ENROLLMENT_TOKEN -ne "") {
     $ITAM_JSON = @{
         hostname = $ITAM_HOSTNAME
         serial = $ITAM_SERIAL
+        manufacturer = $ITAM_MANUFACTURER
+        model = $ITAM_MODEL
         enrollmentToken = $ENROLLMENT_TOKEN
         os = @{
             name = $ITAM_OS_NAME
