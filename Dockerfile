@@ -35,10 +35,12 @@ RUN apt-get update && apt-get install -y \
     python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built artifacts and package metadata as root so npm can write node_modules
+# Copy built artifacts, data files, and package metadata as root so npm can write node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/static ./static
 COPY --from=builder /app/build ./build
+COPY --from=builder /app/server/data ./server/data
+COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/package.json ./package.json
 
 # Install production dependencies as root (use --omit=dev to avoid npm's deprecated warning)
