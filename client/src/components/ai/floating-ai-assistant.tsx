@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,10 +25,11 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [answer, setAnswer] = useState<string>("");
+  const [summary, setSummary] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Only show to admin-level users
-  if (!user || (user.role !== "admin" && user.role !== "super-admin")) {
+  if (!user) {
     return null;
   }
 
@@ -53,6 +53,9 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
     }
 
     setIsLoading(true);
+    setErrorMessage("");
+    setAnswer("");
+    setSummary("");
 
     try {
       const response = await authenticatedRequest("POST", "/api/ai/query", {
@@ -65,14 +68,13 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
       }
 
       const data = await response.json();
-      
-      // Navigate to AI response page with the response data
-      setLocation(`/ai-response?sessionId=${data.sessionId}`);
-      setIsOpen(false);
+      setAnswer((data.answer || "").trim());
+      setSummary((data.summary || "").trim());
       setPrompt("");
 
     } catch (error: any) {
       console.error('AI query error:', error);
+      setErrorMessage(error?.message || "There was an error processing your request. Please try again.");
       toast({
         title: "AI query failed",
         description: error?.message || "There was an error processing your request. Please try again.",
@@ -119,7 +121,18 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
       </div>
 
       {/* Main AI Assistant Button */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          setIsOpen(open);
+          if (!open) {
+            setPrompt("");
+            setAnswer("");
+            setSummary("");
+            setErrorMessage("");
+          }
+        }}
+      >
         <DialogTrigger asChild>
           <Button
             size="sm"
@@ -199,6 +212,40 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
                 </div>
               </div>
             </div>
+            
+            {(answer || summary || errorMessage || isLoading) && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">Assistant Response</div>
+                <div className="rounded-lg border border-border bg-muted/30 p-3 min-h-[90px]">
+                  {isLoading && !answer && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      Thinking with your ITAM data...
+                    </div>
+                  )}
+                  {summary && (
+                    <p className="text-sm font-semibold text-foreground mb-1">
+                      {summary}
+                    </p>
+                  )}
+                  {answer && (
+                    <p className="text-sm text-foreground whitespace-pre-line">
+                      {answer}
+                    </p>
+                  )}
+                  {errorMessage && (
+                    <p className="text-sm text-destructive">
+                      {errorMessage}
+                    </p>
+                  )}
+                  {!answer && !errorMessage && !isLoading && (
+                    <p className="text-sm text-muted-foreground">
+                      Ask a question to see AI-powered insights here.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground">Example questions:</div>

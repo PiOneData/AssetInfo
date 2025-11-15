@@ -325,7 +325,7 @@ export const insertAssetSchema = createInsertSchema(assets, {
   updatedAt: true,
 }).extend({
   type: AssetTypeEnum, // Enforce Title Case asset types
-  purchaseCost: z.number().positive().optional().or(z.undefined()),
+  purchaseCost: z.number().nonnegative().optional().or(z.undefined()),
 });
 
 export const insertSoftwareLicenseSchema = createInsertSchema(softwareLicenses).omit({

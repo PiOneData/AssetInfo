@@ -21,6 +21,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEn
 import { SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
 
 function DraggableQuickActions({ position }: { position: { x: number; y: number } }) {
   const {
@@ -34,6 +35,17 @@ function DraggableQuickActions({ position }: { position: { x: number; y: number 
 
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const permissions = getRolePermissions(user?.role);
+
+  const hasAnyAction =
+    permissions.canCreateTickets ||
+    permissions.canManageAssets ||
+    permissions.canManageTeam ||
+    permissions.canEditVendors;
+
+  if (!permissions.canUseQuickActions || !hasAnyAction) {
+    return null;
+  }
 
   const handleNavigateToAddAsset = () => {
     setLocation("/assets/new");
@@ -95,8 +107,8 @@ function DraggableQuickActions({ position }: { position: { x: number; y: number 
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           
-          {/* Show Raise Ticket for non-technicians */}
-          {user && user.role !== "technician" && (
+          {/* Show Raise Ticket for permitted roles */}
+          {permissions.canCreateTickets && (
             <DropdownMenuItem 
               onClick={handleNavigateToRaiseTicket}
               className="flex items-center gap-3 cursor-pointer"
@@ -110,41 +122,47 @@ function DraggableQuickActions({ position }: { position: { x: number; y: number 
             </DropdownMenuItem>
           )}
           
-          <DropdownMenuItem 
-            onClick={handleNavigateToAddAsset}
-            className="flex items-center gap-3 cursor-pointer"
-            data-testid="menu-item-add-asset"
-          >
-            <Package className="h-4 w-4 text-blue-500" />
-            <div className="flex flex-col">
-              <span className="font-medium">Add Asset</span>
-              <span className="text-xs text-muted-foreground">Hardware or Software</span>
-            </div>
-          </DropdownMenuItem>
+          {permissions.canManageAssets && (
+            <DropdownMenuItem 
+              onClick={handleNavigateToAddAsset}
+              className="flex items-center gap-3 cursor-pointer"
+              data-testid="menu-item-add-asset"
+            >
+              <Package className="h-4 w-4 text-blue-500" />
+              <div className="flex flex-col">
+                <span className="font-medium">Add Asset</span>
+                <span className="text-xs text-muted-foreground">Hardware or Software</span>
+              </div>
+            </DropdownMenuItem>
+          )}
           
-          <DropdownMenuItem 
-            onClick={handleNavigateToAddUser}
-            className="flex items-center gap-3 cursor-pointer"
-            data-testid="menu-item-add-user"
-          >
-            <Users className="h-4 w-4 text-purple-500" />
-            <div className="flex flex-col">
-              <span className="font-medium">Add User</span>
-              <span className="text-xs text-muted-foreground">Team Member</span>
-            </div>
-          </DropdownMenuItem>
+          {permissions.canManageTeam && (
+            <DropdownMenuItem 
+              onClick={handleNavigateToAddUser}
+              className="flex items-center gap-3 cursor-pointer"
+              data-testid="menu-item-add-user"
+            >
+              <Users className="h-4 w-4 text-purple-500" />
+              <div className="flex flex-col">
+                <span className="font-medium">Add User</span>
+                <span className="text-xs text-muted-foreground">Team Member</span>
+              </div>
+            </DropdownMenuItem>
+          )}
           
-          <DropdownMenuItem 
-            onClick={handleNavigateToAddVendor}
-            className="flex items-center gap-3 cursor-pointer"
-            data-testid="menu-item-add-vendor"
-          >
-            <Building2 className="h-4 w-4 text-orange-500" />
-            <div className="flex flex-col">
-              <span className="font-medium">Add Vendor</span>
-              <span className="text-xs text-muted-foreground">Supplier Information</span>
-            </div>
-          </DropdownMenuItem>
+          {permissions.canEditVendors && (
+            <DropdownMenuItem 
+              onClick={handleNavigateToAddVendor}
+              className="flex items-center gap-3 cursor-pointer"
+              data-testid="menu-item-add-vendor"
+            >
+              <Building2 className="h-4 w-4 text-orange-500" />
+              <div className="flex flex-col">
+                <span className="font-medium">Add Vendor</span>
+                <span className="text-xs text-muted-foreground">Supplier Information</span>
+              </div>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

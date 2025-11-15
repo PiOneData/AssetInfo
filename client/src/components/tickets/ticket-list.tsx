@@ -12,6 +12,7 @@ import { TicketCard } from "./ticket-card";
 import { TicketCommentDialog } from "./ticket-comment-dialog";
 import { TicketEditDialog } from "./ticket-edit-dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
 import { authenticatedRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -32,6 +33,17 @@ export function TicketList({
 }: TicketListProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const permissions = getRolePermissions(user?.role);
+
+  const ensurePermission = (can: boolean, description: string) => {
+    if (can) return true;
+    toast({
+      title: "Insufficient permissions",
+      description,
+      variant: "destructive",
+    });
+    return false;
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -83,7 +95,7 @@ export function TicketList({
       const response = await authenticatedRequest("GET", "/api/users/technicians");
       return response.json();
     },
-    enabled: !!user && (user.role === "manager" || user.role === "admin"),
+    enabled: !!user && permissions.canAssignTickets,
   });
 
   // Assignment mutation
@@ -147,16 +159,25 @@ export function TicketList({
 
   // Handlers
   const handleAssignTicket = (ticketId: string) => {
+    if (!ensurePermission(permissions.canAssignTickets, "Only admins and IT managers can assign tickets.")) {
+      return;
+    }
     setSelectedTicketId(ticketId);
     setAssignDialogOpen(true);
   };
 
   const handleUpdateStatus = (ticketId: string) => {
+    if (!ensurePermission(permissions.canUpdateTicketStatus, "You cannot update ticket status.")) {
+      return;
+    }
     setSelectedTicketId(ticketId);
     setStatusDialogOpen(true);
   };
 
   const handleAssignSubmit = () => {
+    if (!ensurePermission(permissions.canAssignTickets, "Only admins and IT managers can assign tickets.")) {
+      return;
+    }
     if (!selectedAssignee || !selectedTicketId) return;
     
     const assignee = technicians.find((tech: any) => tech.id === selectedAssignee);
@@ -170,6 +191,9 @@ export function TicketList({
   };
 
   const handleStatusSubmit = () => {
+    if (!ensurePermission(permissions.canUpdateTicketStatus, "You cannot update ticket status.")) {
+      return;
+    }
     if (!selectedStatus || !selectedTicketId) return;
     
     updateStatusMutation.mutate({
@@ -182,6 +206,9 @@ export function TicketList({
 
   // New action handlers
   const handleEditTicket = (ticketId: string) => {
+    if (!ensurePermission(permissions.canEditTickets, "You cannot edit tickets.")) {
+      return;
+    }
     const ticket = tickets.find(t => t.id === ticketId);
     if (ticket) {
       setTicketToEdit(ticket);
@@ -190,11 +217,19 @@ export function TicketList({
   };
 
   const handleDeleteTicket = (ticketId: string) => {
+    if (!ensurePermission(permissions.canDeleteTickets, "Only admins can delete tickets.")) {
+      return;
+    }
     setTicketToDelete(ticketId);
     setDeleteDialogOpen(true);
   };
 
   const confirmDeleteTicket = async () => {
+    if (!ensurePermission(permissions.canDeleteTickets, "Only admins can delete tickets.")) {
+      setDeleteDialogOpen(false);
+      setTicketToDelete("");
+      return;
+    }
     if (!ticketToDelete) return;
     
     try {
@@ -216,11 +251,19 @@ export function TicketList({
   };
 
   const handleCloseTicket = (ticketId: string) => {
+    if (!ensurePermission(permissions.canUpdateTicketStatus, "You cannot close tickets.")) {
+      return;
+    }
     setTicketToClose(ticketId);
     setCloseDialogOpen(true);
   };
 
   const confirmCloseTicket = async () => {
+    if (!ensurePermission(permissions.canUpdateTicketStatus, "You cannot close tickets.")) {
+      setCloseDialogOpen(false);
+      setTicketToClose("");
+      return;
+    }
     if (!ticketToClose) return;
     
     try {
@@ -244,6 +287,9 @@ export function TicketList({
   };
 
   const handleCommentTicket = (ticketId: string) => {
+    if (!ensurePermission(permissions.canCommentOnTickets, "You cannot comment on tickets.")) {
+      return;
+    }
     const ticket = tickets.find(t => t.id === ticketId);
     if (ticket) {
       setCommentTicketId(ticket.id);
@@ -412,12 +458,12 @@ export function TicketList({
                 key={ticket.id}
                 ticket={ticket}
                 onClick={() => onTicketClick?.(ticket)}
-                onAssign={handleAssignTicket}
-                onUpdateStatus={handleUpdateStatus}
-                onEdit={handleEditTicket}
-                onDelete={handleDeleteTicket}
-                onClose={handleCloseTicket}
-                onComment={handleCommentTicket}
+                onAssign={permissions.canAssignTickets ? handleAssignTicket : undefined}
+                onUpdateStatus={permissions.canUpdateTicketStatus ? handleUpdateStatus : undefined}
+                onEdit={permissions.canEditTickets ? handleEditTicket : undefined}
+                onDelete={permissions.canDeleteTickets ? handleDeleteTicket : undefined}
+                onClose={permissions.canUpdateTicketStatus ? handleCloseTicket : undefined}
+                onComment={permissions.canCommentOnTickets ? handleCommentTicket : undefined}
               />
             ))}
           </div>
@@ -425,6 +471,7 @@ export function TicketList({
       </div>
 
       {/* Assignment Dialog */}
+      {permissions.canAssignTickets && (
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -461,8 +508,10 @@ export function TicketList({
           </div>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Status Update Dialog */}
+      {permissions.canUpdateTicketStatus && (
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -519,8 +568,10 @@ export function TicketList({
           </div>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Delete Confirmation Dialog */}
+      {permissions.canDeleteTickets && (
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -540,8 +591,10 @@ export function TicketList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
 
       {/* Close Confirmation Dialog */}
+      {permissions.canUpdateTicketStatus && (
       <AlertDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -558,21 +611,26 @@ export function TicketList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
 
       {/* Comment Dialog */}
+      {permissions.canCommentOnTickets && (
       <TicketCommentDialog
         ticketId={commentTicketId}
         ticketNumber={commentTicketNumber}
         open={commentDialogOpen}
         onOpenChange={setCommentDialogOpen}
       />
+      )}
 
       {/* Edit Dialog */}
+      {permissions.canEditTickets && (
       <TicketEditDialog
         ticket={ticketToEdit}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
       />
+      )}
     </div>
   );
 }

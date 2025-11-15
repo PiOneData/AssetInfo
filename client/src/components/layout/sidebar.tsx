@@ -48,8 +48,8 @@ const navigation = [
       { name: "Others", href: "/assets?type=Others", icon: Package },
     ]
   },
-  { name: "Vendors", href: "/vendors", icon: Building2, requiredRole: "technician" },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Vendors", href: "/vendors", icon: Building2, requiredRole: "it-manager" },
+  { name: "Reports", href: "/reports", icon: BarChart3, requiredRole: "it-manager" },
   { name: "Team Management", href: "/users", icon: Users, requiredRole: "admin" },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

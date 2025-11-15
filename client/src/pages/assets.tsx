@@ -5,7 +5,7 @@ import { SoftwareDevices } from "@/components/assets/SoftwareDevices";
 import { AssetAnalytics } from "@/components/assets/AssetAnalytics";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearch } from "@/hooks/use-search";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
 import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";
@@ -20,6 +20,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authenticatedRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
 import { Laptop, Monitor, Code, Edit, Eye, Trash2, Search, Upload, Download, FileText, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ArrowUp, ArrowDown, Settings, Calendar, DollarSign, Package, MapPin, User, Hash, Building, Wrench, Mail, BadgeCheck } from "lucide-react";
 import type { Asset, InsertAsset } from "@shared/schema";
 import { AssetTypeEnum } from "@shared/schema";
@@ -70,9 +72,11 @@ interface EnhancedAssetsTableProps {
   onEditAsset: (asset: Asset) => void;
   onDeleteAsset: (id: string) => void;
   onViewAsset: (asset: Asset) => void; 
+  canEditAssets: boolean;
+  canDeleteAssets: boolean;
 }
 
-function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, onViewAsset }: EnhancedAssetsTableProps) {
+function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, onViewAsset, canEditAssets, canDeleteAssets }: EnhancedAssetsTableProps) {
   const [sortField, setSortField] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [, setLocation] = useLocation();
@@ -304,9 +308,9 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
   };
 
   const formatCurrency = (value: string | number | null) => {
-    if (!value) return 'N/A';
+    if (!value && value !== 0) return 'N/A';
     const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    return isNaN(numValue) ? 'N/A' : `$${numValue.toLocaleString()}`;
+    return isNaN(numValue) ? 'N/A' : `$${numValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (date: string | Date | null) => {
@@ -1260,22 +1264,26 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
                           >
                             <Eye className="h-4 w-4 action-icon" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEditAsset(asset)}
-                            data-testid={`button-edit-${asset.id}`}
-                          >
-                            <Edit className="h-4 w-4 action-icon" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDeleteAsset(asset.id)}
-                            data-testid={`button-delete-${asset.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 action-icon" />
-                          </Button>
+                          {canEditAssets && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEditAsset(asset)}
+                              data-testid={`button-edit-${asset.id}`}
+                            >
+                              <Edit className="h-4 w-4 action-icon" />
+                            </Button>
+                          )}
+                          {canDeleteAssets && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onDeleteAsset(asset.id)}
+                              data-testid={`button-delete-${asset.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 action-icon text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -1321,18 +1329,50 @@ export default function Assets() {
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
 
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const permissions = getRolePermissions(user?.role);
+
   // Detect if we're in "new" mode and auto-open the form
   useEffect(() => {
     if (location === '/assets/new') {
-      setIsAssetFormOpen(true);
+      if (permissions.canManageAssets) {
+        setIsAssetFormOpen(true);
+      } else {
+        toast({
+          title: "Insufficient permissions",
+          description: "You can view assets but cannot create or edit them.",
+          variant: "destructive",
+        });
+        setLocation('/assets');
+      }
     }
-  }, [location]);
+  }, [location, permissions.canManageAssets, setLocation, toast]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadResults, setUploadResults] = useState<any>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+
+  const ensurePermission = (can: boolean, description: string) => {
+    if (can) return true;
+    toast({
+      title: "Insufficient permissions",
+      description,
+      variant: "destructive",
+    });
+    return false;
+  };
+
+  useEffect(() => {
+    if (!permissions.canManageAssets) {
+      setIsAssetFormOpen(false);
+      setEditingAsset(undefined);
+    }
+    if (!permissions.canBulkUploadAssets) {
+      setIsBulkUploadOpen(false);
+    }
+  }, [permissions.canManageAssets, permissions.canBulkUploadAssets]);
 
 
   // Initialize filters based on URL parameters
@@ -1589,11 +1629,17 @@ export default function Assets() {
   });
 
   const handleAddAsset = () => {
+    if (!ensurePermission(permissions.canManageAssets, "You can view assets but cannot create or edit them.")) {
+      return;
+    }
     setEditingAsset(undefined);
     setIsAssetFormOpen(true);
   };
 
   const handleEditAsset = (asset: Asset) => {
+    if (!ensurePermission(permissions.canManageAssets, "You can view assets but cannot create or edit them.")) {
+      return;
+    }
     setEditingAsset(asset);
     setIsAssetFormOpen(true);
   };
@@ -1606,6 +1652,10 @@ export default function Assets() {
 
 
   const handleAssetSubmit = (assetData: Omit<InsertAsset, 'tenantId'> | InsertAsset) => {
+    if (!ensurePermission(permissions.canManageAssets, "You do not have permission to save asset changes.")) {
+      setIsAssetFormOpen(false);
+      return;
+    }
     console.log("handleAssetSubmit called with:", assetData);
     console.log("editingAsset:", editingAsset);
     if (editingAsset) {
@@ -1618,6 +1668,9 @@ export default function Assets() {
   };
 
   const handleDeleteAsset = (id: string) => {
+    if (!ensurePermission(permissions.canDeleteAssets, "Only administrators can delete assets.")) {
+      return;
+    }
     if (confirm("Are you sure you want to delete this asset?")) {
       deleteAssetMutation.mutate(id);
     }
@@ -1649,6 +1702,9 @@ export default function Assets() {
 
   // Bulk upload functions
   const handleBulkUpload = () => {
+    if (!ensurePermission(permissions.canBulkUploadAssets, "Bulk upload is available only for asset managers.")) {
+      return;
+    }
     setIsBulkUploadOpen(true);
     setUploadFile(null);
     setUploadResults(null);
@@ -1863,16 +1919,19 @@ export default function Assets() {
         <TopBar
           title={getPageTitle()}
           description={getPageDescription()}
-          onAddClick={handleAddAsset}
+          onAddClick={permissions.canManageAssets ? handleAddAsset : undefined}
+          showAddButton={permissions.canManageAssets}
           addButtonText="Add Asset"
-          onBulkUploadClick={handleBulkUpload}
+          onBulkUploadClick={permissions.canBulkUploadAssets ? handleBulkUpload : undefined}
         />
         
         <div className="p-6">
           {/* Enrollment Card - Add Devices */}
-          <div className="mb-6">
-            <EnrollmentLinkCard />
-          </div>
+          {permissions.canViewEnrollmentLink && (
+            <div className="mb-6">
+              <EnrollmentLinkCard />
+            </div>
+          )}
 
           {/* Asset Analytics Dashboard */}
           <AssetAnalytics assets={filteredAssets} />
@@ -1967,6 +2026,8 @@ export default function Assets() {
             onEditAsset={handleEditAsset}
             onDeleteAsset={handleDeleteAsset}
             onViewAsset={handleViewAsset}
+            canEditAssets={permissions.canManageAssets}
+            canDeleteAssets={permissions.canDeleteAssets}
           />
         </div>
       </main>
@@ -2043,18 +2104,21 @@ export default function Assets() {
       </DrawerContent>
     </Drawer>
       
-      <AssetForm
-        isOpen={isAssetFormOpen}
-        onClose={() => {
-          setIsAssetFormOpen(false);
-          setEditingAsset(undefined);
-        }}
-        onSubmit={handleAssetSubmit}
-        asset={editingAsset}
-        isLoading={createAssetMutation.isPending || updateAssetMutation.isPending}
-      />
+      {permissions.canManageAssets && (
+        <AssetForm
+          isOpen={isAssetFormOpen}
+          onClose={() => {
+            setIsAssetFormOpen(false);
+            setEditingAsset(undefined);
+          }}
+          onSubmit={handleAssetSubmit}
+          asset={editingAsset}
+          isLoading={createAssetMutation.isPending || updateAssetMutation.isPending}
+        />
+      )}
 
       {/* Bulk Upload Modal */}
+      {permissions.canBulkUploadAssets && (
       <Dialog open={isBulkUploadOpen} onOpenChange={setIsBulkUploadOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -2250,6 +2314,7 @@ export default function Assets() {
           </Tabs>
         </DialogContent>
       </Dialog>
+      )}
       
       {/* Global Floating AI Assistant */}
       <FloatingAIAssistant />

@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layout } from "@/components/layout/layout";
-import { ReportGenerator } from "@/components/dashboard/report-generator";
+import { ReportGenerator, type ReportHistoryEntry } from "@/components/dashboard/report-generator";
 import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";
 import { authenticatedRequest } from "@/lib/auth";
 import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
+import { useToast } from "@/hooks/use-toast";
 import { 
   FileSpreadsheet, 
   Download, 
@@ -28,17 +30,9 @@ import {
   ChevronRight
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { exportReportToExcel } from "@/lib/report-export";
 
-interface RecentReport {
-  id: string;
-  name: string;
-  type: string;
-  fields: string[];
-  recordCount: number;
-  generatedBy: string;
-  generatedAt: Date;
-  size: number;
-}
+const RECENT_REPORTS_KEY = "recent-reports";
 
 interface AuditLog {
   id: string;
@@ -69,6 +63,8 @@ interface AuditLogsResponse {
 
 export default function Reports() {
   const { user } = useAuth();
+  const permissions = getRolePermissions(user?.role);
+  const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState({
     action: "",
@@ -110,51 +106,20 @@ export default function Reports() {
       const response = await authenticatedRequest("GET", `/api/audit-logs?${params}`);
       return response.json();
     },
+    enabled: permissions.canViewReports,
   });
 
-  // Mock recent reports data - in real app this would come from backend
-  const recentReports: RecentReport[] = [
-    {
-      id: "1",
-      name: "Assets Full Report",
-      type: "all",
-      fields: ["name", "type", "category", "status", "location", "assignedTo", "purchaseDate"],
-      recordCount: 245,
-      generatedBy: "John Smith",
-      generatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-      size: 1.2 * 1024 * 1024 // 1.2 MB
-    },
-    {
-      id: "2", 
-      name: "Hardware Inventory",
-      type: "hardware",
-      fields: ["name", "serialNumber", "manufacturer", "model", "status", "warrantyExpiry"],
-      recordCount: 156,
-      generatedBy: "Sarah Johnson", 
-      generatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      size: 0.8 * 1024 * 1024 // 0.8 MB
-    },
-    {
-      id: "3",
-      name: "Financial Report",
-      type: "all", 
-      fields: ["name", "purchaseDate", "purchasePrice", "status", "location"],
-      recordCount: 198,
-      generatedBy: "Mike Davis",
-      generatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-      size: 0.5 * 1024 * 1024 // 0.5 MB
-    },
-    {
-      id: "4",
-      name: "Software Licenses",
-      type: "software",
-      fields: ["name", "type", "assignedTo", "status", "notes"],
-      recordCount: 89,
-      generatedBy: "Emma Wilson",
-      generatedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-      size: 0.3 * 1024 * 1024 // 0.3 MB
+  const [recentReports, setRecentReports] = useState<ReportHistoryEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem(RECENT_REPORTS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
     }
-  ];
+  });
+  const [redownloadId, setRedownloadId] = useState<string | null>(null);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -217,6 +182,94 @@ export default function Reports() {
     return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
   };
 
+  const toastSuccess = (title: string, description?: string) => {
+    toast({
+      title,
+      description,
+    });
+  };
+
+  const toastError = (title: string, description?: string) => {
+    toast({
+      title,
+      description: description || "Please try again.",
+      variant: "destructive",
+    });
+  };
+
+  const handleReportGenerated = (entry: ReportHistoryEntry) => {
+    setRecentReports((prev) => {
+      const next = [entry, ...prev.filter((report) => report.id !== entry.id)].slice(0, 10);
+      localStorage.setItem(RECENT_REPORTS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleRedownload = async (report: ReportHistoryEntry) => {
+    if (!report.params?.fields?.length) {
+      toastError("Cannot re-download", "Missing report configuration.");
+      return;
+    }
+
+    setRedownloadId(report.id);
+    try {
+      const params = new URLSearchParams({
+        fields: report.params.fields.join(","),
+        type: report.params.type || "all",
+      });
+
+      const response = await authenticatedRequest("GET", `/api/assets/report?${params}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to download report");
+      }
+
+      const data = await response.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("No data available for this report");
+      }
+
+      const filename = `${report.name
+        .toLowerCase()
+        .replace(/\\s+/g, "-")}-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.xlsx`;
+
+      exportReportToExcel(data, filename);
+      toastSuccess("Report downloaded", `${report.name} downloaded successfully.`);
+    } catch (error: any) {
+      toastError("Download failed", error?.message);
+    } finally {
+      setRedownloadId(null);
+    }
+  };
+
+  const reportsThisMonth = recentReports.filter((report) => {
+    const generatedDate = new Date(report.generatedAt);
+    const now = new Date();
+    return (
+      generatedDate.getMonth() === now.getMonth() &&
+      generatedDate.getFullYear() === now.getFullYear()
+    );
+  }).length;
+  const totalReports = recentReports.length;
+  const totalContributors = new Set(
+    recentReports.map((report) => report.generatedBy || "Unknown")
+  ).size;
+
+  if (!permissions.canViewReports) {
+    return (
+      <Layout title="Reports & Activity Logs" description="Generate custom reports and monitor system activity">
+        <div className="flex-1 flex items-center justify-center p-6">
+          <Card className="max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Access restricted</CardTitle>
+              <CardDescription>Only admins can view reports.</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="Reports & Activity Logs" description="Generate custom reports and monitor system activity">
       <div className="flex-1 space-y-6 p-4 pt-6 page-enter">
@@ -246,7 +299,7 @@ export default function Reports() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Report Generator - Full width on mobile, 2/3 on large screens */}
               <div className="lg:col-span-2">
-                <ReportGenerator metrics={metrics} />
+                <ReportGenerator metrics={metrics} onReportGenerated={handleReportGenerated} />
               </div>
 
               {/* Quick Stats */}
@@ -261,21 +314,21 @@ export default function Reports() {
                         <TrendingUp className="h-4 w-4 text-blue-600" />
                         <span className="text-sm">This Month</span>
                       </div>
-                      <span className="font-medium" data-testid="stats-this-month">12</span>
+                      <span className="font-medium" data-testid="stats-this-month">{reportsThisMonth}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <FileSpreadsheet className="h-4 w-4 text-green-600" />
                         <span className="text-sm">Total Reports</span>
                       </div>
-                      <span className="font-medium" data-testid="stats-total-reports">47</span>
+                      <span className="font-medium" data-testid="stats-total-reports">{totalReports}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-purple-600" />
                         <span className="text-sm">Contributors</span>
                       </div>
-                      <span className="font-medium" data-testid="stats-contributors">8</span>
+                      <span className="font-medium" data-testid="stats-contributors">{totalContributors}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -322,7 +375,7 @@ export default function Reports() {
                                 </Badge>
                               </div>
                               <p className="text-xs text-muted-foreground">
-                                {report.recordCount} records • {formatFileSize(report.size)}
+                                {report.recordCount ?? 0} records • {formatFileSize(report.size ?? 0)}
                               </p>
                             </div>
                             <Button
@@ -330,9 +383,20 @@ export default function Reports() {
                               size="sm"
                               className="flex items-center gap-1"
                               data-testid={`button-redownload-${report.id}`}
+                              disabled={redownloadId === report.id}
+                              onClick={() => handleRedownload(report)}
                             >
-                              <Download className="h-3 w-3" />
-                              Re-download
+                              {redownloadId === report.id ? (
+                                <>
+                                  <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
+                                  Downloading...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3" />
+                                  Re-download
+                                </>
+                              )}
                             </Button>
                           </div>
 
@@ -342,7 +406,7 @@ export default function Reports() {
                               <Calendar className="h-3 w-3 text-muted-foreground" />
                               <span className="text-muted-foreground">Generated:</span>
                               <span data-testid={`report-date-${report.id}`}>
-                                {formatDistanceToNow(report.generatedAt, { addSuffix: true })}
+                                {formatDistanceToNow(new Date(report.generatedAt), { addSuffix: true })}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -356,10 +420,10 @@ export default function Reports() {
                           <div className="space-y-2">
                             <div className="flex items-center gap-2 text-xs">
                               <Filter className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-muted-foreground">Fields ({report.fields.length}):</span>
+                              <span className="text-muted-foreground">Fields ({report.fields?.length ?? 0}):</span>
                             </div>
                             <div className="flex flex-wrap gap-1">
-                              {report.fields.slice(0, 4).map((field) => (
+                              {(report.fields ?? []).slice(0, 4).map((field) => (
                                 <Badge 
                                   key={field} 
                                   variant="secondary" 
@@ -369,9 +433,9 @@ export default function Reports() {
                                   {field}
                                 </Badge>
                               ))}
-                              {report.fields.length > 4 && (
+                              {(report.fields?.length ?? 0) > 4 && (
                                 <Badge variant="secondary" className="text-xs">
-                                  +{report.fields.length - 4} more
+                                  +{(report.fields?.length ?? 0) - 4} more
                                 </Badge>
                               )}
                             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
@@ -10,6 +10,8 @@ import { DraggableTileWrapper } from "@/components/dashboard/draggable-tile-wrap
 import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { restrictToParentElement, restrictToWindowEdges } from '@dnd-kit/modifiers';
+
+const AI_NO_DATA_MESSAGE = "No meaningful recommendations can be generated because your organization does not have enough ITAM data.";
 
 interface DashboardTile {
   id: string;
@@ -32,6 +34,9 @@ import { RecentActivitiesTile } from "@/components/dashboard/individual-tiles/re
 import { Button } from "@/components/ui/button";
 import { authenticatedRequest } from "@/lib/auth";
 import type { Recommendation } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
 
 // Create dashboard tiles for draggable system
 function createDashboardTiles(
@@ -373,8 +378,13 @@ function createDashboardTiles(
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const permissions = getRolePermissions(user?.role);
   const [isDragMode, setIsDragMode] = useState(false);
   const [tilePositions, setTilePositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [aiNoDataMessage, setAiNoDataMessage] = useState("");
 
   // Load positions from localStorage on mount
   useEffect(() => {
@@ -434,12 +444,63 @@ export default function Dashboard() {
     },
   });
 
-  // Fetch recommendations
+  // Fetch AI recommendations
   const { data: recommendations = [] } = useQuery({
-    queryKey: ["/api/recommendations"],
+    queryKey: ["/api/ai/recommendations", "pending"],
     queryFn: async () => {
-      const response = await authenticatedRequest("GET", "/api/recommendations?status=pending");
+      const response = await authenticatedRequest("GET", "/api/ai/recommendations?status=pending");
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to load AI recommendations");
+      }
       return response.json();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to load AI insights",
+        description: error?.message || "Something went wrong while loading recommendations.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if ((recommendations || []).length > 0) {
+      setAiNoDataMessage("");
+    }
+  }, [recommendations.length]);
+
+  const generateAiRecommendationsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authenticatedRequest("POST", "/api/ai/recommendations/run");
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to generate AI recommendations");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data?.status === "no-data") {
+        setAiNoDataMessage(data.message || AI_NO_DATA_MESSAGE);
+        toast({
+          title: "Insufficient data",
+          description: data.message || AI_NO_DATA_MESSAGE,
+        });
+        return;
+      }
+      setAiNoDataMessage("");
+      queryClient.invalidateQueries({ queryKey: ["/api/ai/recommendations"] });
+      toast({
+        title: "AI insights refreshed",
+        description: "New optimization recommendations are ready.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Generation failed",
+        description: error?.message || "Unable to generate AI recommendations right now.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -449,6 +510,18 @@ export default function Dashboard() {
 
   const handleViewRecommendation = (id: string) => {
     navigate(`/recommendations?id=${id}`);
+  };
+
+  const handleGenerateAiRecommendations = () => {
+    if (!permissions.canGenerateAIRecommendations) {
+      toast({
+        title: "Insufficient permissions",
+        description: "Only admins can generate new AI recommendations.",
+        variant: "destructive",
+      });
+      return;
+    }
+    generateAiRecommendationsMutation.mutate();
   };
 
   const handleNavigateToAssets = (type?: string, category?: string) => {
@@ -712,6 +785,9 @@ export default function Dashboard() {
                     recommendations={recommendations || []}
                     onViewAll={handleViewAllRecommendations}
                     onViewRecommendation={handleViewRecommendation}
+                    onGenerate={permissions.canGenerateAIRecommendations ? handleGenerateAiRecommendations : undefined}
+                    isGenerating={generateAiRecommendationsMutation.isPending}
+                    noDataMessage={aiNoDataMessage}
                   />
                 </DraggableTileWrapper>
               </div>

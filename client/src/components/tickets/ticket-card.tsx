@@ -6,7 +6,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Calendar, User, MessageSquare, AlertCircle, UserPlus, CheckCircle, MoreVertical, Edit, Trash2, XCircle, MessageCircle } from "lucide-react";
 import { TicketStatusBadge } from "./ticket-status-badge";
 import { TicketPriorityBadge } from "./ticket-priority-badge";
-import { useAuth } from "@/hooks/use-auth";
 import type { Ticket } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
@@ -23,12 +22,13 @@ interface TicketCardProps {
 }
 
 export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatus, onEdit, onDelete, onClose, onComment }: TicketCardProps) {
-  const { user } = useAuth();
-  
-  // Check if user can perform actions
-  const canManageTicket = user && ['super-admin', 'admin', 'it-manager'].includes(user.role);
-  const isAssignedTechnician = user?.role === 'technician' && ticket.assignedToId === user.id;
-  const canComment = canManageTicket || isAssignedTechnician;
+  const canComment = Boolean(onComment);
+  const hasMenuActions = Boolean(
+    (onComment) ||
+    (onEdit && ticket.status !== "closed") ||
+    (onClose && ticket.status !== "closed") ||
+    onDelete
+  );
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -84,7 +84,7 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
             <TicketStatusBadge status={ticket.status as any} />
             
             {/* Action Menu */}
-            {(canManageTicket || isAssignedTechnician) && (
+            {hasMenuActions && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -92,7 +92,7 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                  {canComment && onComment && (
+                  {onComment && (
                     <DropdownMenuItem onClick={(e) => {
                       e.stopPropagation();
                       onComment(ticket.id);
@@ -102,7 +102,7 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
                     </DropdownMenuItem>
                   )}
                   
-                  {canManageTicket && onEdit && ticket.status !== 'closed' && (
+                  {onEdit && ticket.status !== 'closed' && (
                     <DropdownMenuItem onClick={(e) => {
                       e.stopPropagation();
                       onEdit(ticket.id);
@@ -112,7 +112,7 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
                     </DropdownMenuItem>
                   )}
                   
-                  {canManageTicket && onClose && ticket.status !== 'closed' && (
+                  {onClose && ticket.status !== 'closed' && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={(e) => {
@@ -125,7 +125,7 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
                     </>
                   )}
                   
-                  {canManageTicket && onDelete && (
+                  {onDelete && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
@@ -230,8 +230,8 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
           
           {/* Role-based action buttons */}
           <div className="flex items-center space-x-2">
-            {/* Assignment button for managers/admins on unassigned tickets */}
-            {(user?.role === "manager" || user?.role === "admin") && 
+            {/* Assignment button for roles with assign permission */}
+            {onAssign && 
              !ticket.assignedToId && 
              ticket.status !== "closed" && (
               <Button
@@ -248,9 +248,8 @@ export function TicketCard({ ticket, onClick, className, onAssign, onUpdateStatu
               </Button>
             )}
             
-            {/* Status update button for technicians on assigned tickets */}
-            {user?.role === "technician" && 
-             ticket.assignedToId === user.id && 
+            {/* Status update button for roles with update permission */}
+            {onUpdateStatus && 
              ticket.status !== "closed" && (
               <Button
                 size="sm"

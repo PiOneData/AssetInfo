@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -13,6 +14,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,12 +33,10 @@ import {
   Users as UsersIcon, 
   UserPlus, 
   Search, 
-  Mail, 
   Shield, 
   UserCheck, 
   UserX, 
   Crown,
-  Clock,
   CheckCircle,
   XCircle,
   MoreHorizontal,
@@ -56,16 +63,11 @@ interface TeamMember {
   createdAt: string;
 }
 
-interface Invitation {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  status: string;
-  expiresAt: string;
-  createdAt: string;
-  inviterName?: string;
+interface UserActionsProps {
+  member: TeamMember;
+  currentUser?: { id: string; role: string } | null;
+  onEditRole: (user: TeamMember) => void;
+  onToggleStatus: (user: TeamMember) => void;
 }
 
 export default function Users() {
@@ -100,11 +102,6 @@ export default function Users() {
     },
   });
 
-  // Temporarily disable invitations to focus on user list
-  const allInvitations: Invitation[] = [];
-  const invitationsLoading = false;
-  const invitationsError = null;
-
   // Invite user form
   const inviteForm = useForm<InviteUser>({
     resolver: zodResolver(inviteUserSchema),
@@ -132,12 +129,11 @@ export default function Users() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/invitations"] });
+      const displayName = data.firstName || inviteForm.getValues("firstName") || data.email;
       setIsInviteDialogOpen(false);
       inviteForm.reset();
       toast({
-        title: "User created successfully",
-        description: `Account created for ${data.email}. Login credentials will be provided separately.`,
+        title: `Account created successfully for ${displayName}. Login credentials will be provided separately.`,
       });
     },
     onError: (error: any) => {
@@ -217,32 +213,6 @@ export default function Users() {
     },
   });
 
-  // Cancel invitation mutation
-  const cancelInvitationMutation = useMutation({
-    mutationFn: async (invitationId: string) => {
-      const response = await authenticatedRequest("DELETE", `/api/users/invitations/${invitationId}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to cancel invitation");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/invitations"] });
-      toast({
-        title: "Invitation cancelled",
-        description: "The invitation has been cancelled successfully.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to cancel invitation",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Bulk upload mutations
   const validateBulkUploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -275,7 +245,6 @@ export default function Users() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/invitations"] });
       setIsBulkUploadOpen(false);
       setUploadFile(null);
       setUploadResults(null);
@@ -315,10 +284,6 @@ export default function Users() {
     } else {
       activateUserMutation.mutate(user.id);
     }
-  };
-
-  const handleCancelInvitation = (invitationId: string) => {
-    cancelInvitationMutation.mutate(invitationId);
   };
 
   // Bulk upload helper functions
@@ -417,20 +382,11 @@ export default function Users() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  // Filter invitations to only show pending ones
-  const pendingInvitations = allInvitations.filter(invitation => invitation.status === 'pending');
-  const filteredInvitations = pendingInvitations.filter(invitation => {
-    const matchesSearch = `${invitation.firstName} ${invitation.lastName} ${invitation.email}`
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
-
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex-1 md:ml-64 overflow-auto">
-        <TopBar title="Team Management" description="Manage your organization's team members and invitations" />
+        <TopBar title="Team Management" description="Manage your organization's team members and roles" />
         <main className="p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
@@ -440,7 +396,7 @@ export default function Users() {
                   Team Management
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  Manage your organization's team members and invitations
+                  Manage your organization's team members and roles
                 </p>
               </div>
               
@@ -537,6 +493,10 @@ export default function Users() {
                       )}
                     </div>
 
+                    <div className="text-xs text-muted-foreground bg-muted/40 border border-dashed border-muted rounded-md p-3">
+                      Default password for all newly created users is <span className="font-semibold">admin123</span>. Share it securely and have the user update it after the first login.
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         type="button"
@@ -551,7 +511,7 @@ export default function Users() {
                         disabled={inviteUserMutation.isPending}
                         data-testid="button-send-invite"
                       >
-                        {inviteUserMutation.isPending ? "Sending..." : "Send Invitation"}
+                        {inviteUserMutation.isPending ? "Creating..." : "Create Team Member"}
                       </Button>
                     </div>
                   </form>
@@ -615,36 +575,9 @@ export default function Users() {
               </Card>
             )}
 
-            {invitationsError && (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-8">
-                    <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2">Failed to load invitations</h3>
-                    <p className="text-muted-foreground">
-                      {invitationsError instanceof Error ? invitationsError.message : "Unable to load invitation data. Please try again."}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Tabs for Team Members and Invitations */}
-            {!teamError && !invitationsError && (
-              <Tabs defaultValue="team" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="team" data-testid="tab-team-members">
-                    <UsersIcon className="h-4 w-4 mr-2" />
-                    Team Members ({filteredTeamMembers.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="invitations" data-testid="tab-invitations">
-                    <Mail className="h-4 w-4 mr-2" />
-                    Pending Invitations ({filteredInvitations.length})
-                  </TabsTrigger>
-                </TabsList>
-
-              {/* Team Members Tab */}
-              <TabsContent value="team" className="space-y-4">
+            {/* Team Members */}
+            {!teamError && (
+              <div className="space-y-4">
                 {teamLoading ? (
                   <Card>
                     <CardContent className="pt-6">
@@ -663,7 +596,7 @@ export default function Users() {
                         <p className="text-muted-foreground mb-4">
                           {searchTerm || roleFilter !== "all" || statusFilter !== "all"
                             ? "Try adjusting your filters to see more results."
-                            : "Start by inviting your first team member."}
+                            : "Use the “Create Team Member” button to add your first teammate."}
                         </p>
                       </div>
                     </CardContent>
@@ -703,45 +636,25 @@ export default function Users() {
                                 {member.role === "admin" && <Crown className="h-3 w-3 mr-1" />}
                                 {member.role === "it-manager" && <Shield className="h-3 w-3 mr-1" />}
                                 {member.role === "read-only" && <UserCheck className="h-3 w-3 mr-1" />}
-                                {member.role.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                                {member.role.replace("-", " " ).replace(/\b\w/g, l => l.toUpperCase())}
                               </Badge>
-                              <Badge 
-                                variant={member.isActive ? "default" : "secondary"}
-                                data-testid={`badge-status-${member.id}`}
-                              >
+                              <Badge variant={member.isActive ? "default" : "secondary"} data-testid={`badge-status-${member.id}`}>
                                 {member.isActive ? (
                                   <>
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    Active
+                                    <CheckCircle className="h-3 w-3 mr-1" /> Active
                                   </>
                                 ) : (
                                   <>
-                                    <XCircle className="h-3 w-3 mr-1" />
-                                    Inactive
+                                    <XCircle className="h-3 w-3 mr-1" /> Inactive
                                   </>
                                 )}
                               </Badge>
-                              {member.id !== currentUser?.id && (
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleEditRole(member)}
-                                    data-testid={`button-edit-role-${member.id}`}
-                                  >
-                                    <Edit className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleToggleStatus(member)}
-                                    disabled={deactivateUserMutation.isPending || activateUserMutation.isPending}
-                                    data-testid={`button-toggle-status-${member.id}`}
-                                  >
-                                    {member.isActive ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
-                                  </Button>
-                                </div>
-                              )}
+                              <UserActions
+                                member={member}
+                                currentUser={currentUser}
+                                onEditRole={handleEditRole}
+                                onToggleStatus={handleToggleStatus}
+                              />
                             </div>
                           </div>
                         </CardContent>
@@ -749,86 +662,7 @@ export default function Users() {
                     ))}
                   </div>
                 )}
-              </TabsContent>
-
-              {/* Invitations Tab */}
-              <TabsContent value="invitations" className="space-y-4">
-                {invitationsLoading ? (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                        <p className="text-muted-foreground mt-2">Loading invitations...</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : filteredInvitations.length === 0 ? (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-center py-8">
-                        <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-foreground mb-2">No pending invitations</h3>
-                        <p className="text-muted-foreground mb-4">
-                          All invitations have been accepted or there are no pending invitations.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4">
-                    {filteredInvitations.map((invitation) => (
-                      <Card key={invitation.id} data-testid={`card-invitation-${invitation.id}`}>
-                        <CardContent className="pt-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <Avatar className="h-12 w-12">
-                                <AvatarFallback className="bg-muted">
-                                  {invitation.firstName.charAt(0)}{invitation.lastName.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <h3 className="font-medium text-foreground" data-testid={`text-invitation-name-${invitation.id}`}>
-                                  {invitation.firstName} {invitation.lastName}
-                                </h3>
-                                <p className="text-sm text-muted-foreground" data-testid={`text-invitation-email-${invitation.id}`}>
-                                  {invitation.email}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Invited by {invitation.inviterName} • Expires {new Date(invitation.expiresAt).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={getRoleBadgeVariant(invitation.role)} data-testid={`badge-invitation-role-${invitation.id}`}>
-                                {invitation.role === "admin" && <Crown className="h-3 w-3 mr-1" />}
-                                {invitation.role === "it-manager" && <Shield className="h-3 w-3 mr-1" />}
-                                {invitation.role === "read-only" && <UserCheck className="h-3 w-3 mr-1" />}
-                                {invitation.role.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
-                              </Badge>
-                              <Badge variant={getStatusBadgeVariant(invitation.status)} data-testid={`badge-invitation-status-${invitation.id}`}>
-                                <Clock className="h-3 w-3 mr-1" />
-                                {invitation.status.charAt(0).toUpperCase() + invitation.status.slice(1)}
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCancelInvitation(invitation.id)}
-                                disabled={cancelInvitationMutation.isPending}
-                                data-testid={`button-cancel-invitation-${invitation.id}`}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <X className="h-3 w-3" />
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-              </Tabs>
+              </div>
             )}
           </div>
         </main>
@@ -1138,5 +972,64 @@ export default function Users() {
       {/* Global Floating AI Assistant */}
       <FloatingAIAssistant />
     </div>
+  );
+}
+
+function UserActions({ member, currentUser, onEditRole, onToggleStatus }: UserActionsProps) {
+  const currentRole = currentUser?.role ?? "";
+  const isSelf = currentUser?.id === member.id;
+  const canManage =
+    currentRole === "super-admin" ||
+    (currentRole === "admin" && member.role !== "super-admin" && member.role !== "admin");
+
+  if (!canManage) {
+    return null;
+  }
+
+  const handleEditClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onEditRole(member);
+  };
+
+  const handleStatusClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onToggleStatus(member);
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          data-testid={`user-actions-trigger-${member.id}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuLabel>User Actions</DropdownMenuLabel>
+        <DropdownMenuItem
+          onClick={handleEditClick}
+          disabled={isSelf}
+          data-testid={`user-actions-edit-${member.id}`}
+        >
+          Edit Role
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={handleStatusClick}
+          disabled={isSelf}
+          className={member.isActive ? "text-destructive focus:text-destructive" : ""}
+          data-testid={`user-actions-toggle-${member.id}`}
+        >
+          {member.isActive ? "Deactivate User" : "Activate User"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

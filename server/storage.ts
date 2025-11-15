@@ -70,6 +70,7 @@ export interface IStorage {
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   updateUserProfile(userId: string, tenantId: string, profile: UpdateUserProfile): Promise<User | undefined>;
   updateUserPassword(userId: string, tenantId: string, hashedPassword: string): Promise<boolean>;
+  deleteUserAndCleanup(userId: string, tenantId: string, fallbackUser: User): Promise<boolean>;
   
   // User Management
   getTenantUsers(tenantId: string): Promise<User[]>;
@@ -123,9 +124,11 @@ export interface IStorage {
   getAssetUtilization(assetId: string, tenantId: string): Promise<AssetUtilization[]>;
 
   // Recommendations
-  getRecommendations(tenantId: string): Promise<Recommendation[]>;
+  getRecommendations(tenantId: string, status?: string): Promise<Recommendation[]>;
   createRecommendation(recommendation: InsertRecommendation): Promise<Recommendation>;
   updateRecommendationStatus(id: string, tenantId: string, status: string): Promise<Recommendation | undefined>;
+  deleteRecommendation(id: string, tenantId: string): Promise<boolean>;
+  deleteRecommendationsByTenant(tenantId: string): Promise<void>;
   
   // AI Responses
   createAIResponse(response: InsertAIResponse): Promise<AIResponse>;
@@ -133,7 +136,10 @@ export interface IStorage {
 
   // Master Data
   getMasterData(tenantId: string, type?: string): Promise<MasterData[]>;
+  getMasterDataById(id: string, tenantId: string): Promise<MasterData | undefined>;
   addMasterData(masterData: InsertMasterData): Promise<MasterData>;
+  updateMasterData(id: string, tenantId: string, data: Partial<InsertMasterData>): Promise<MasterData | undefined>;
+  deleteMasterData(id: string, tenantId: string): Promise<boolean>;
   getDistinctFromAssets(tenantId: string, field: string): Promise<{ value: string }[]>;
 
   // Audit Logs
@@ -387,6 +393,80 @@ export class DatabaseStorage implements IStorage {
       .set({ isActive: true, updatedAt: new Date() })
       .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
     return (result.rowCount || 0) > 0;
+  }
+
+  async deleteUserAndCleanup(userId: string, tenantId: string, fallbackUser: User): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      const [targetUser] = await tx
+        .select()
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+        .limit(1);
+
+      if (!targetUser) {
+        return false;
+      }
+
+      const fallbackDisplayName = [fallbackUser.firstName, fallbackUser.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || fallbackUser.email;
+
+      await tx
+        .update(assets)
+        .set({
+          assignedUserId: null,
+          assignedUserName: null,
+          assignedUserEmail: null,
+          assignedUserEmployeeId: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(assets.tenantId, tenantId), eq(assets.assignedUserId, userId)));
+
+      await tx
+        .update(tickets)
+        .set({
+          requestorId: fallbackUser.id,
+          requestorName: fallbackDisplayName,
+          requestorEmail: fallbackUser.email,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tickets.tenantId, tenantId), eq(tickets.requestorId, userId)));
+
+      await tx
+        .update(tickets)
+        .set({
+          assignedToId: null,
+          assignedToName: null,
+          assignedAt: null,
+          status: "open",
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tickets.tenantId, tenantId), eq(tickets.assignedToId, userId)));
+
+      await tx
+        .update(tickets)
+        .set({
+          assignedById: null,
+          assignedByName: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tickets.tenantId, tenantId), eq(tickets.assignedById, userId)));
+
+      await tx
+        .delete(userPreferences)
+        .where(and(eq(userPreferences.userId, userId), eq(userPreferences.tenantId, tenantId)));
+
+      await tx
+        .delete(aiResponses)
+        .where(and(eq(aiResponses.userId, userId), eq(aiResponses.tenantId, tenantId)));
+
+      const deleteResult = await tx
+        .delete(users)
+        .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+
+      return (deleteResult.rowCount || 0) > 0;
+    });
   }
 
   // User Invitations
@@ -723,7 +803,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Recommendations
-  async getRecommendations(tenantId: string): Promise<Recommendation[]> {
+  async getRecommendations(tenantId: string, status?: string): Promise<Recommendation[]> {
+    if (status && ["pending", "accepted", "dismissed"].includes(status)) {
+      return await db
+        .select()
+        .from(recommendations)
+        .where(and(eq(recommendations.tenantId, tenantId), eq(recommendations.status, status)));
+    }
+
     return await db.select().from(recommendations).where(eq(recommendations.tenantId, tenantId));
   }
 
@@ -739,6 +826,17 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(recommendations.id, id), eq(recommendations.tenantId, tenantId)))
       .returning();
     return updatedRecommendation || undefined;
+  }
+
+  async deleteRecommendation(id: string, tenantId: string): Promise<boolean> {
+    const result = await db
+      .delete(recommendations)
+      .where(and(eq(recommendations.id, id), eq(recommendations.tenantId, tenantId)));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async deleteRecommendationsByTenant(tenantId: string): Promise<void> {
+    await db.delete(recommendations).where(eq(recommendations.tenantId, tenantId));
   }
 
   async createAIResponse(response: InsertAIResponse): Promise<AIResponse> {
@@ -766,9 +864,51 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(masterData).where(eq(masterData.tenantId, tenantId));
   }
 
+  async getMasterDataById(id: string, tenantId: string): Promise<MasterData | undefined> {
+    const [record] = await db
+      .select()
+      .from(masterData)
+      .where(and(eq(masterData.id, id), eq(masterData.tenantId, tenantId)))
+      .limit(1);
+    return record || undefined;
+  }
+
   async addMasterData(data: InsertMasterData): Promise<MasterData> {
     const [newData] = await db.insert(masterData).values(data).returning();
     return newData;
+  }
+
+  async updateMasterData(id: string, tenantId: string, data: Partial<InsertMasterData>): Promise<MasterData | undefined> {
+    const updatePayload: Partial<typeof masterData.$inferInsert> = {
+      value: data.value,
+      description: data.description,
+      metadata: data.metadata,
+      isActive: data.isActive,
+      updatedAt: new Date(),
+    };
+
+    // Remove undefined fields to avoid overwriting existing values with null
+    Object.keys(updatePayload).forEach((key) => {
+      const typedKey = key as keyof typeof updatePayload;
+      if (updatePayload[typedKey] === undefined) {
+        delete updatePayload[typedKey];
+      }
+    });
+
+    const [updated] = await db
+      .update(masterData)
+      .set(updatePayload)
+      .where(and(eq(masterData.id, id), eq(masterData.tenantId, tenantId)))
+      .returning();
+
+    return updated || undefined;
+  }
+
+  async deleteMasterData(id: string, tenantId: string): Promise<boolean> {
+    const result = await db
+      .delete(masterData)
+      .where(and(eq(masterData.id, id), eq(masterData.tenantId, tenantId)));
+    return (result.rowCount || 0) > 0;
   }
 
   async getDistinctFromAssets(tenantId: string, field: string): Promise<{ value: string }[]> {

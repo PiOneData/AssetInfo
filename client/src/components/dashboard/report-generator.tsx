@@ -11,13 +11,29 @@ import { useToast } from "@/hooks/use-toast";
 import { authenticatedRequest } from "@/lib/auth";
 import { useAuth } from "@/hooks/use-auth";
 import { Download, FileSpreadsheet, Filter, Lock } from "lucide-react";
-import * as XLSX from 'xlsx';
+import { exportReportToExcel } from "@/lib/report-export";
+
+export interface ReportHistoryEntry {
+  id: string;
+  name: string;
+  type: string;
+  fields: string[];
+  generatedAt: string;
+  generatedBy: string;
+  recordCount: number;
+  size: number;
+  params?: {
+    type: string;
+    fields: string[];
+  };
+}
 
 interface ReportGeneratorProps {
   metrics: any;
+  onReportGenerated?: (entry: ReportHistoryEntry) => void;
 }
 
-export function ReportGenerator({ metrics }: ReportGeneratorProps) {
+export function ReportGenerator({ metrics, onReportGenerated }: ReportGeneratorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [assetType, setAssetType] = useState<string>("all");
@@ -132,31 +148,35 @@ export function ReportGenerator({ metrics }: ReportGeneratorProps) {
       }
 
       // Create Excel file
-      const worksheet = XLSX.utils.json_to_sheet(reportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Assets Report");
-
-      // Auto-size columns based on header names and sample data
-      const columnWidths = Object.keys(reportData[0] || {}).map(header => {
-        const maxDataLength = Math.max(
-          ...reportData.map((row: any) => String(row[header] || '').length),
-          header.length
-        );
-        return { wch: Math.min(Math.max(maxDataLength + 2, 15), 50) };
-      });
-      worksheet['!cols'] = columnWidths;
-
       // Generate filename with timestamp
       const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
       const filename = `assets-report-${timestamp}.xlsx`;
 
-      // Download file
-      XLSX.writeFile(workbook, filename);
+      exportReportToExcel(reportData, filename);
 
       toast({
         title: "Report generated successfully",
         description: `Downloaded ${filename} with ${reportData.length} records.`
       });
+
+      const metadata: ReportHistoryEntry = {
+        id: (globalThis.crypto?.randomUUID?.() ?? Date.now().toString()),
+        name: `${assetType === "all" ? "All Assets" : `${assetType.charAt(0).toUpperCase()}${assetType.slice(1)}`} Report`,
+        type: assetType,
+        fields: selectedFields,
+        generatedAt: new Date().toISOString(),
+        generatedBy: user
+          ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email || "Unknown"
+          : "Unknown",
+        recordCount: reportData.length,
+        size: new TextEncoder().encode(JSON.stringify(reportData)).length,
+        params: {
+          type: assetType,
+          fields: selectedFields,
+        },
+      };
+
+      onReportGenerated?.(metadata);
 
       setIsOpen(false);
     } catch (error: any) {

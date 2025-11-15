@@ -16,10 +16,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { authenticatedRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
 import { 
   type UpdateUserProfile, 
   type UpdateUserPreferences, 
@@ -38,13 +50,15 @@ import {
   Users,
   Building,
   Save,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown
 } from "lucide-react";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user, tenant } = useAuth();
+  const { user, tenant, logout } = useAuth();
+  const permissions = getRolePermissions(user?.role);
 
   // Fetch user profile data
   const { data: userProfile, isLoading: userProfileLoading, error: userProfileError } = useQuery<UserType>({
@@ -71,7 +85,7 @@ export default function SettingsPage() {
       const response = await authenticatedRequest("GET", "/api/org/settings");
       return response.json();
     },
-    enabled: user?.role === "admin", // Only admin can view org settings
+    enabled: permissions.canAccessOrgSettings,
   });
 
   // Local form state
@@ -105,6 +119,10 @@ export default function SettingsPage() {
     autoRecommendations: false,
     dataRetentionDays: 365,
   });
+
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isFinalDeleteConfirmOpen, setIsFinalDeleteConfirmOpen] = useState(false);
 
   // Change password dialog state
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -262,6 +280,32 @@ export default function SettingsPage() {
     },
   });
 
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authenticatedRequest("DELETE", "/api/users/me");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Account deleted",
+        description: "Your account has been removed. We'll redirect you to sign in again.",
+      });
+      setIsFinalDeleteConfirmOpen(false);
+      setIsDeleteConfirmOpen(false);
+      logout();
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 500);
+    },
+    onError: () => {
+      toast({
+        title: "Unable to delete account",
+        description: "Please try again or contact your administrator.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveProfile = () => {
     updateProfileMutation.mutate(profileForm);
   };
@@ -302,15 +346,17 @@ export default function SettingsPage() {
             </div>
 
             <Tabs defaultValue="profile" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className={`grid w-full ${permissions.canAccessOrgSettings ? "grid-cols-4" : "grid-cols-3"}`}>
                 <TabsTrigger value="profile" className="flex items-center gap-2" data-testid="tab-profile">
                   <User className="h-4 w-4" />
                   Profile
                 </TabsTrigger>
-                <TabsTrigger value="organization" className="flex items-center gap-2" data-testid="tab-organization">
-                  <Building className="h-4 w-4" />
-                  Organization
-                </TabsTrigger>
+                {permissions.canAccessOrgSettings && (
+                  <TabsTrigger value="organization" className="flex items-center gap-2" data-testid="tab-organization">
+                    <Building className="h-4 w-4" />
+                    Organization
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="notifications" className="flex items-center gap-2" data-testid="tab-notifications">
                   <Bell className="h-4 w-4" />
                   Notifications
@@ -433,108 +479,119 @@ export default function SettingsPage() {
               </TabsContent>
 
               {/* Organization Settings */}
+              {permissions.canAccessOrgSettings && (
               <TabsContent value="organization" className="space-y-6">
-                {user?.role !== "admin" ? (
-                  <Card>
-                    <CardContent className="text-center py-8">
-                      <p className="text-muted-foreground">
-                        You need admin privileges to access organization settings.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card>
-                    <CardHeader>
+                <Card>
+                  <CardHeader className="flex items-center justify-between">
+                    <div>
                       <CardTitle className="flex items-center gap-2">
                         <Building className="h-5 w-5" />
                         Organization Settings
                       </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {orgSettingsLoading ? (
-                        <div className="space-y-4">
-                          <Skeleton className="h-10 w-full" />
-                          <div className="grid grid-cols-2 gap-4">
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                          </div>
-                          <Skeleton className="h-6 w-full" />
-                        </div>
-                      ) : (
-                        <>
-                          <div>
-                            <Label htmlFor="orgName">Organization Name</Label>
-                            <Input
-                              id="orgName"
-                              value={orgForm.name}
-                              onChange={(e) => setOrgForm(prev => ({ ...prev, name: e.target.value }))}
-                              data-testid="input-org-name"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="timezone">Timezone</Label>
-                              <Select value={orgForm.timezone} onValueChange={(value) => setOrgForm(prev => ({ ...prev, timezone: value }))}>
-                                <SelectTrigger data-testid="select-timezone">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="UTC">UTC</SelectItem>
-                                  <SelectItem value="EST">EST</SelectItem>
-                                  <SelectItem value="PST">PST</SelectItem>
-                                  <SelectItem value="GMT">GMT</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            
-                            <div>
-                              <Label htmlFor="currency">Currency</Label>
-                              <Select value={orgForm.currency} onValueChange={(value) => setOrgForm(prev => ({ ...prev, currency: value }))}>
-                                <SelectTrigger data-testid="select-currency">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="USD">USD</SelectItem>
-                                  <SelectItem value="EUR">EUR</SelectItem>
-                                  <SelectItem value="GBP">GBP</SelectItem>
-                                  <SelectItem value="INR">INR</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between py-4">
-                            <div className="space-y-1">
-                              <Label htmlFor="autoRecommendations">Auto-generate AI Recommendations</Label>
-                              <p className="text-sm text-muted-foreground">
-                                Automatically generate optimization recommendations weekly
-                              </p>
-                            </div>
-                            <Switch
-                              id="autoRecommendations"
-                              checked={orgForm.autoRecommendations}
-                              onCheckedChange={(checked) => setOrgForm(prev => ({ ...prev, autoRecommendations: checked }))}
-                              data-testid="switch-auto-recommendations"
-                            />
-                          </div>
-
-                          <div className="flex justify-end">
-                            <Button 
-                              onClick={handleSaveOrgSettings} 
-                              disabled={updateOrgSettingsMutation.isPending} 
-                              data-testid="button-save-org"
-                            >
-                              <Save className="h-4 w-4 mr-2" />
-                              {updateOrgSettingsMutation.isPending ? "Saving..." : "Save Changes"}
-                            </Button>
-                          </div>
-                        </>
+                      <p className="text-sm text-muted-foreground">
+                        Manage organization details and policies
+                      </p>
+                      {!permissions.canEditOrgSettings && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Only super admins can modify organization settings.
+                        </p>
                       )}
-                    </CardContent>
-                  </Card>
-                )}
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      Tenant ID: {tenant?.id}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {orgSettingsLoading ? (
+                      <div className="space-y-4">
+                        <Skeleton className="h-10 w-full" />
+                        <div className="grid grid-cols-2 gap-4">
+                          <Skeleton className="h-10 w-full" />
+                          <Skeleton className="h-10 w-full" />
+                        </div>
+                        <Skeleton className="h-6 w-full" />
+                      </div>
+                    ) : orgSettingsError ? (
+                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                        <p className="text-sm text-destructive">
+                          Unable to load organization settings. Please try again later.
+                        </p>
+                      </div>
+                    ) : (
+                      <fieldset disabled={!permissions.canEditOrgSettings} className="space-y-4">
+                        <div>
+                          <Label htmlFor="orgName">Organization Name</Label>
+                          <Input
+                            id="orgName"
+                            value={orgForm.name}
+                            onChange={(e) => setOrgForm(prev => ({ ...prev, name: e.target.value }))}
+                            data-testid="input-org-name"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="timezone">Timezone</Label>
+                            <Select value={orgForm.timezone} onValueChange={(value) => setOrgForm(prev => ({ ...prev, timezone: value }))}>
+                              <SelectTrigger data-testid="select-timezone">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="UTC">UTC</SelectItem>
+                                <SelectItem value="EST">EST</SelectItem>
+                                <SelectItem value="PST">PST</SelectItem>
+                                <SelectItem value="GMT">GMT</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="currency">Currency</Label>
+                            <Select value={orgForm.currency} onValueChange={(value) => setOrgForm(prev => ({ ...prev, currency: value }))}>
+                              <SelectTrigger data-testid="select-currency">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="USD">USD</SelectItem>
+                                <SelectItem value="EUR">EUR</SelectItem>
+                                <SelectItem value="GBP">GBP</SelectItem>
+                                <SelectItem value="INR">INR</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between py-4">
+                          <div className="space-y-1">
+                            <Label htmlFor="autoRecommendations">Auto-generate AI Recommendations</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Automatically generate optimization recommendations weekly
+                            </p>
+                          </div>
+                          <Switch
+                            id="autoRecommendations"
+                            checked={orgForm.autoRecommendations}
+                            onCheckedChange={(checked) => setOrgForm(prev => ({ ...prev, autoRecommendations: checked }))}
+                            data-testid="switch-auto-recommendations"
+                          />
+                        </div>
+
+                        <div className="flex justify-end">
+                          <Button 
+                            onClick={handleSaveOrgSettings} 
+                            disabled={updateOrgSettingsMutation.isPending || !permissions.canEditOrgSettings} 
+                            data-testid="button-save-org"
+                          >
+                            <Save className="h-4 w-4 mr-2" />
+                            {updateOrgSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                          </Button>
+                        </div>
+                      </fieldset>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
+              )}
 
               {/* Notifications Settings */}
               <TabsContent value="notifications" className="space-y-6">
@@ -739,22 +796,50 @@ export default function SettingsPage() {
                     <Separator />
 
                     <div className="space-y-4">
-                      <h3 className="text-lg font-medium text-destructive flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5" />
-                        Danger Zone
-                      </h3>
-                      
-                      <div className="flex items-center justify-between p-4 border border-destructive/50 rounded-lg">
-                        <div className="space-y-1">
-                          <p className="font-medium">Delete Account</p>
-                          <p className="text-sm text-muted-foreground">
-                            Permanently delete your account and all associated data
+                      <Collapsible
+                        open={isAdvancedOpen}
+                        onOpenChange={setIsAdvancedOpen}
+                        className="rounded-lg border border-border/60 bg-muted/10 p-4"
+                      >
+                        <CollapsibleTrigger className="flex w-full items-center justify-between text-left">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Advanced</p>
+                            <p className="text-xs text-muted-foreground">
+                              Reveal sensitive account actions
+                            </p>
+                          </div>
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${isAdvancedOpen ? "rotate-180" : ""}`}
+                          />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-4 space-y-4">
+                          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="space-y-1">
+                                <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Delete Account
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  Permanently deactivate your login. This action cannot be undone.
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-destructive text-destructive hover:bg-destructive/10"
+                                onClick={() => setIsDeleteConfirmOpen(true)}
+                                data-testid="button-delete-account"
+                              >
+                                Delete My Account
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Only your personal access will be removed. Organization data and other team members remain unaffected.
                           </p>
-                        </div>
-                        <Button variant="destructive" data-testid="button-delete-account">
-                          Delete Account
-                        </Button>
-                      </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
                   </CardContent>
                 </Card>
@@ -766,6 +851,53 @@ export default function SettingsPage() {
       
       {/* Global Floating AI Assistant */}
       <FloatingAIAssistant />
+
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will deactivate your AssetNext account and sign you out.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setIsDeleteConfirmOpen(false);
+              setIsFinalDeleteConfirmOpen(true);
+            }}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={isFinalDeleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (deleteAccountMutation.isPending) return;
+          setIsFinalDeleteConfirmOpen(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>This action is irreversible. Proceed?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deleting your account cannot be undone. All personal access will be removed immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteAccountMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteAccountMutation.mutate()}
+              disabled={deleteAccountMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteAccountMutation.isPending ? "Deleting..." : "Yes, delete my account"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

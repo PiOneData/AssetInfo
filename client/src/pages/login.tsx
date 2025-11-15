@@ -41,10 +41,16 @@ export default function Login() {
         title: "Welcome back!",
         description: "You have been successfully logged in.",
       });
-    } catch (error) {
+    } catch (error: any) {
+      localStorage.removeItem("token");
+      const apiMessage = error?.data?.message || error?.message;
+      const description =
+        apiMessage?.includes("deactivated")
+          ? apiMessage
+          : "Invalid email or password. Please try again.";
       toast({
         title: "Login failed",
-        description: "Invalid email or password. Please try again.",
+        description,
         variant: "destructive",
       });
     }

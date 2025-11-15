@@ -24,7 +24,7 @@ import { LocationSelector } from "@/components/ui/location-selector";
 const assetFormSchema = insertAssetSchema.extend({
   tenantId: z.string().optional(), // Make tenantId optional for form validation
   purchaseDate: z.string().optional(),
-  purchaseCost: z.coerce.number().min(1, "Purchase cost must be at least $1.00 if provided").optional().or(z.undefined()),
+  purchaseCost: z.coerce.number().min(0, "Purchase cost must be zero or greater").optional().or(z.undefined()),
   warrantyExpiry: z.string().optional(),
   renewalDate: z.string().optional(),
   vendorEmail: z.string().email("Please enter a valid email address (e.g., vendor@company.com)").optional().or(z.literal("")).or(z.undefined()),
@@ -682,16 +682,19 @@ export function AssetForm({ isOpen, onClose, onSubmit, asset, isLoading }: Asset
   const watchedCategory = watch('category');
   const watchedStatus = watch('status');
 
+  const formatUSDValue = (amount?: number | string) => {
+    if (amount === null || amount === undefined || amount === "" || Number.isNaN(Number(amount))) {
+      return "Not specified";
+    }
+    return `$${Number(amount).toFixed(2)} USD`;
+  };
+
   const formatFieldValue = (value: any, fieldType?: string): string => {
     if (value === null || value === undefined || value === "") return "Not specified";
     
     if (fieldType === "date" && typeof value === "string") {
       const date = new Date(value);
       return date.toLocaleDateString();
-    }
-    
-    if (fieldType === "currency" && typeof value === "number") {
-      return `$${value.toFixed(2)}`;
     }
     
     return String(value);
@@ -761,7 +764,9 @@ export function AssetForm({ isOpen, onClose, onSubmit, asset, isLoading }: Asset
               </div>
               <div>
                 <span className="font-medium text-muted-foreground">Purchase Cost:</span>
-                <p className="text-foreground" data-testid="text-review-purchase-cost">{formatFieldValue(reviewData.purchaseCost, "currency")}</p>
+                <p className="text-foreground" data-testid="text-review-purchase-cost">
+                  {formatUSDValue(reviewData.purchaseCost)}
+                </p>
               </div>
               <div className="col-span-2">
                 <span className="font-medium text-muted-foreground">Warranty Expiry:</span>
@@ -1030,16 +1035,24 @@ export function AssetForm({ isOpen, onClose, onSubmit, asset, isLoading }: Asset
             
             <div>
               <Label htmlFor="purchaseCost">Purchase Cost</Label>
-              <Input
-                id="purchaseCost"
-                type="number"
-                step="0.01"
-                {...register("purchaseCost", { 
-                  setValueAs: v => v === '' || v == null || Number.isNaN(+v) ? undefined : +v 
-                })}
-                placeholder="0.00"
-                data-testid="input-purchase-cost"
-              />
+              <div className="relative">
+                <Input
+                  id="purchaseCost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="pr-16"
+                  {...register("purchaseCost", { 
+                    setValueAs: v => v === '' || v == null || Number.isNaN(+v) ? undefined : +v 
+                  })}
+                  placeholder="0.00"
+                  data-testid="input-purchase-cost"
+                />
+                <span className="absolute inset-y-0 right-3 flex items-center text-muted-foreground text-xs font-medium">
+                  USD ($)
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Enter the amount in USD (US Dollars). Minimum value is $0.00.</p>
               {errors.purchaseCost && (
                 <p className="text-red-500 text-sm mt-1">{errors.purchaseCost.message}</p>
               )}

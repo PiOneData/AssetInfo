@@ -11,19 +11,26 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { CalendarDays, Building2, Mail, Phone, Plus, Search, Edit, Trash2, Calendar as CalendarIcon } from "lucide-react";
+import { authenticatedRequest } from "@/lib/auth";
+import { useAuth } from "@/hooks/use-auth";
+import { getRolePermissions } from "@/lib/permissions";
+import { CalendarDays, Building2, Mail, Phone, Plus, Search, Edit, Trash2, Eye, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+
+const CONTRACT_TYPE_OPTIONS = ["Annual", "Monthly", "One-time"] as const;
+type ContractTypeOption = typeof CONTRACT_TYPE_OPTIONS[number];
 
 const vendorSchema = z.object({
   name: z.string().min(1, "Vendor name is required"),
@@ -33,8 +40,11 @@ const vendorSchema = z.object({
   address: z.string().optional(),
   contractStartDate: z.date().optional(),
   contractEndDate: z.date().optional(),
-  contractValue: z.string().optional(),
-  contractType: z.string().optional(),
+  contractValue: z.string()
+    .min(1, "Contract value is required")
+    .refine((val) => !Number.isNaN(Number(val)), "Contract value must be a number")
+    .refine((val) => Number(val) >= 0, "Contract value must be greater than or equal to 0"),
+  contractType: z.enum(CONTRACT_TYPE_OPTIONS, { required_error: "Contract type is required" }),
   notes: z.string().optional(),
 });
 
@@ -51,69 +61,91 @@ interface Vendor {
     address?: string;
     contractStartDate?: string;
     contractEndDate?: string;
-    contractValue?: string;
-    contractType?: string;
+    contractValue?: number;
+    contractType?: ContractTypeOption;
   };
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; editingVendor?: Vendor }) {
+function AddVendorForm({ onSuccess, onCancel, editingVendor }: { onSuccess: () => void; onCancel: () => void; editingVendor?: Vendor }) {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [isContractStartOpen, setIsContractStartOpen] = useState(false);
+  const [isContractEndOpen, setIsContractEndOpen] = useState(false);
+
+  const sanitizeField = (value?: string) => {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  };
   
   const form = useForm<VendorData>({
     resolver: zodResolver(vendorSchema),
-    defaultValues: editingVendor ? {
-      name: editingVendor.value,
-      email: editingVendor.metadata?.email || "",
-      phone: editingVendor.metadata?.phone || "",
-      contactPerson: editingVendor.metadata?.contactPerson || "",
-      address: editingVendor.metadata?.address || "",
-      contractStartDate: editingVendor.metadata?.contractStartDate ? new Date(editingVendor.metadata.contractStartDate) : undefined,
-      contractEndDate: editingVendor.metadata?.contractEndDate ? new Date(editingVendor.metadata.contractEndDate) : undefined,
-      contractValue: editingVendor.metadata?.contractValue || "",
-      contractType: editingVendor.metadata?.contractType || "",
-      notes: editingVendor.description || "",
-    } : {
+    defaultValues: {
       name: "",
       email: "",
       phone: "",
       contactPerson: "",
       address: "",
       contractValue: "",
-      contractType: "",
+      contractType: undefined,
       notes: "",
     },
   });
 
+  useEffect(() => {
+    if (editingVendor) {
+      form.reset({
+        name: editingVendor.value,
+        email: editingVendor.metadata?.email || "",
+        phone: editingVendor.metadata?.phone || "",
+        contactPerson: editingVendor.metadata?.contactPerson || "",
+        address: editingVendor.metadata?.address || "",
+        contractStartDate: editingVendor.metadata?.contractStartDate ? new Date(editingVendor.metadata.contractStartDate) : undefined,
+        contractEndDate: editingVendor.metadata?.contractEndDate ? new Date(editingVendor.metadata.contractEndDate) : undefined,
+        contractValue: editingVendor.metadata?.contractValue !== undefined ? String(editingVendor.metadata.contractValue) : "",
+        contractType: editingVendor.metadata?.contractType,
+        notes: editingVendor.description || "",
+      });
+    } else {
+      form.reset({
+        name: "",
+        email: "",
+        phone: "",
+        contactPerson: "",
+        address: "",
+        contractValue: "",
+        contractStartDate: undefined,
+        contractEndDate: undefined,
+        contractType: undefined,
+        notes: "",
+      } as Partial<VendorData>);
+    }
+  }, [editingVendor, form]);
+
   const createVendor = useMutation({
     mutationFn: async (data: VendorData) => {
       const payload = {
-        type: "vendor",
-        value: data.name,
-        description: data.notes,
-        metadata: {
-          email: data.email,
-          phone: data.phone,
-          contactPerson: data.contactPerson,
-          address: data.address,
-          contractStartDate: data.contractStartDate?.toISOString(),
-          contractEndDate: data.contractEndDate?.toISOString(),
-          contractValue: data.contractValue,
-          contractType: data.contractType,
-        },
+        name: data.name.trim(),
+        contactPerson: sanitizeField(data.contactPerson),
+        email: sanitizeField(data.email),
+        phone: sanitizeField(data.phone),
+        address: sanitizeField(data.address),
+        contractStartDate: data.contractStartDate?.toISOString(),
+        contractEndDate: data.contractEndDate?.toISOString(),
+        contractValue: Number(data.contractValue),
+        contractType: data.contractType,
+        notes: sanitizeField(data.notes),
       };
-      
-      if (editingVendor) {
-        return apiRequest("PUT", `/api/master-data/${editingVendor.id}`, payload);
-      } else {
-        return apiRequest("POST", "/api/master-data", payload);
-      }
+
+      const endpoint = editingVendor ? `/api/vendors/${editingVendor.id}` : "/api/vendors";
+      const method = editingVendor ? "PUT" : "POST";
+      const response = await apiRequest(method, endpoint, payload);
+      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/master-data"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
       toast({
         title: editingVendor ? "Vendor updated!" : "Vendor created!",
         description: editingVendor 
@@ -221,7 +253,7 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Contract Start Date</FormLabel>
-                <Popover>
+                <Popover open={isContractStartOpen} onOpenChange={setIsContractStartOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
@@ -241,7 +273,12 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
                     <Calendar
                       mode="single"
                       selected={field.value}
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        if (date) {
+                          setIsContractStartOpen(false);
+                        }
+                      }}
                       disabled={(date) => date > new Date()}
                       initialFocus
                     />
@@ -258,7 +295,7 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Contract End Date</FormLabel>
-                <Popover>
+                <Popover open={isContractEndOpen} onOpenChange={setIsContractEndOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
@@ -278,7 +315,12 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
                     <Calendar
                       mode="single"
                       selected={field.value}
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        if (date) {
+                          setIsContractEndOpen(false);
+                        }
+                      }}
                       disabled={(date) => date < new Date()}
                       initialFocus
                     />
@@ -296,9 +338,22 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
             name="contractValue"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contract Value</FormLabel>
+                <FormLabel>Contract Value *</FormLabel>
                 <FormControl>
-                  <Input placeholder="$10,000" {...field} data-testid="input-contract-value" />
+                  <div className="flex">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="1000"
+                      className="rounded-r-none"
+                      {...field}
+                      data-testid="input-contract-value"
+                    />
+                    <span className="inline-flex items-center rounded-r-md border border-l-0 px-3 text-sm text-muted-foreground">
+                      $
+                    </span>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -310,10 +365,21 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
             name="contractType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contract Type</FormLabel>
-                <FormControl>
-                  <Input placeholder="Annual, Monthly, One-time" {...field} data-testid="input-contract-type" />
-                </FormControl>
+                <FormLabel>Contract Type *</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger data-testid="input-contract-type">
+                      <SelectValue placeholder="Select contract type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {CONTRACT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
@@ -338,7 +404,7 @@ function AddVendorForm({ onSuccess, editingVendor }: { onSuccess: () => void; ed
           <Button 
             type="button" 
             variant="outline" 
-            onClick={() => setLocation("/vendors")}
+            onClick={onCancel}
             data-testid="button-cancel-vendor"
           >
             Cancel
@@ -362,27 +428,68 @@ export default function Vendors() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [viewVendor, setViewVendor] = useState<Vendor | null>(null);
+  const [isViewLoading, setIsViewLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const permissions = getRolePermissions(user?.role);
 
   const isNewVendor = window.location.pathname === "/vendors/new";
 
+  const ensurePermission = (can: boolean, description: string) => {
+    if (can) return true;
+    toast({
+      title: "Insufficient permissions",
+      description,
+      variant: "destructive",
+    });
+    return false;
+  };
+
+  useEffect(() => {
+    if (!permissions.canEditVendors) {
+      setShowAddForm(false);
+      setEditingVendor(null);
+    }
+  }, [permissions.canEditVendors]);
+
   useEffect(() => {
     if (isNewVendor) {
-      setShowAddForm(true);
+      if (permissions.canEditVendors) {
+        setShowAddForm(true);
+      } else {
+        toast({
+          title: "Insufficient permissions",
+          description: "Only admins and IT managers can create or edit vendors.",
+          variant: "destructive",
+        });
+        setLocation("/vendors");
+      }
     }
-  }, [isNewVendor]);
+  }, [isNewVendor, permissions.canEditVendors, setLocation, toast]);
+
+  const fetchVendorById = async (id: string) => {
+    const response = await authenticatedRequest("GET", `/api/vendors/${id}`);
+    return response.json();
+  };
 
   const { data: vendors, isLoading } = useQuery({
-    queryKey: ["/api/master-data", { type: "vendor" }],
-    queryFn: () => fetch("/api/master-data?type=vendor").then(res => res.json()),
+    queryKey: ["/api/vendors"],
+    queryFn: async () => {
+      const response = await authenticatedRequest("GET", "/api/vendors");
+      return response.json();
+    },
+    enabled: permissions.canViewVendors,
   });
 
   const deleteVendor = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/master-data/${id}`, {});
+      const response = await apiRequest("DELETE", `/api/vendors/${id}`, {});
+      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/master-data"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
       toast({
         title: "Vendor deleted!",
         description: "The vendor has been removed from your database.",
@@ -397,6 +504,24 @@ export default function Vendors() {
       });
     },
   });
+
+  const formatContractValue = (value?: number | string) => {
+    if (value === undefined || value === null) return null;
+    const numericValue = typeof value === "number" ? value : Number(value);
+    if (Number.isNaN(numericValue)) {
+      return `${value}$`;
+    }
+    return `${numericValue.toLocaleString()}$`;
+  };
+
+  const formatDateDisplay = (value?: string) => {
+    if (!value) return "—";
+    try {
+      return format(new Date(value), "PPP");
+    } catch {
+      return value;
+    }
+  };
 
   const filteredVendors = vendors?.filter((vendor: Vendor) =>
     vendor.value.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -417,6 +542,9 @@ export default function Vendors() {
     : filteredVendors;
 
   const handleAddVendor = () => {
+    if (!ensurePermission(permissions.canEditVendors, "Only admins and IT managers can create or edit vendors.")) {
+      return;
+    }
     setEditingVendor(null);
     setShowAddForm(true);
     if (!isNewVendor) {
@@ -424,9 +552,25 @@ export default function Vendors() {
     }
   };
 
-  const handleEditVendor = (vendor: Vendor) => {
-    setEditingVendor(vendor);
-    setShowAddForm(true);
+  const handleEditVendor = async (vendorId: string) => {
+    if (!ensurePermission(permissions.canEditVendors, "Only admins and IT managers can create or edit vendors.")) {
+      return;
+    }
+    try {
+      const vendorData = await fetchVendorById(vendorId);
+      setEditingVendor(vendorData);
+      setShowAddForm(true);
+      if (!isNewVendor) {
+        setLocation("/vendors/new");
+      }
+    } catch (error: any) {
+      console.error("Failed to load vendor", error);
+      toast({
+        title: "Unable to load vendor",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCloseForm = () => {
@@ -435,6 +579,31 @@ export default function Vendors() {
     if (isNewVendor) {
       setLocation("/vendors");
     }
+  };
+
+  const handleViewVendor = async (vendorId: string) => {
+    setIsViewDialogOpen(true);
+    setIsViewLoading(true);
+    setViewVendor(null);
+    try {
+      const vendorData = await fetchVendorById(vendorId);
+      setViewVendor(vendorData);
+    } catch (error: any) {
+      console.error("Failed to load vendor", error);
+      toast({
+        title: "Unable to load vendor",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+      setIsViewDialogOpen(false);
+    } finally {
+      setIsViewLoading(false);
+    }
+  };
+
+  const closeViewDialog = () => {
+    setIsViewDialogOpen(false);
+    setViewVendor(null);
   };
 
   const getContractStatus = (vendor: Vendor) => {
@@ -454,6 +623,22 @@ export default function Vendors() {
     }
   };
 
+  if (!permissions.canViewVendors) {
+    return (
+      <div className="flex h-screen bg-background">
+        <Sidebar />
+        <main className="flex-1 md:ml-64 flex items-center justify-center p-6">
+          <Card className="max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Access restricted</CardTitle>
+              <CardDescription>Technicians cannot view vendor information.</CardDescription>
+            </CardHeader>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   if (showAddForm) {
     return (
       <div className="flex h-screen bg-background">
@@ -472,7 +657,7 @@ export default function Vendors() {
               <div className="max-w-4xl mx-auto">
                 <Card>
                   <CardContent className="pt-6">
-                    <AddVendorForm onSuccess={handleCloseForm} editingVendor={editingVendor || undefined} />
+                    <AddVendorForm onSuccess={handleCloseForm} onCancel={handleCloseForm} editingVendor={editingVendor || undefined} />
                   </CardContent>
                 </Card>
               </div>
@@ -493,9 +678,9 @@ export default function Vendors() {
             ? "Vendors with contracts expiring within 3 months" 
             : "Manage your vendor relationships and contracts"
           }
-          showAddButton={true}
+          showAddButton={permissions.canEditVendors}
           addButtonText="Add Vendor"
-          onAddClick={handleAddVendor}
+          onAddClick={permissions.canEditVendors ? handleAddVendor : undefined}
         />
           <div className="p-6">
             <div className="mb-6">
@@ -558,39 +743,56 @@ export default function Vendors() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleEditVendor(vendor)}
-                              data-testid={`button-edit-vendor-${vendor.id}`}
+                              onClick={() => handleViewVendor(vendor.id)}
+                              data-testid={`button-view-vendor-${vendor.id}`}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  data-testid={`button-delete-vendor-${vendor.id}`}
-                                >
-                                  <Trash2 className="w-4 h-4 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete "{vendor.value}"? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            {permissions.canEditVendors && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditVendor(vendor.id)}
+                                data-testid={`button-edit-vendor-${vendor.id}`}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {permissions.canDeleteVendors && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    data-testid={`button-delete-vendor-${vendor.id}`}
+                                  >
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete "{vendor.value}"? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => deleteVendor.mutate(vendor.id)}
+                                    onClick={() => {
+                                      if (!ensurePermission(permissions.canDeleteVendors, "Only admins can delete vendors.")) {
+                                        return;
+                                      }
+                                      deleteVendor.mutate(vendor.id);
+                                    }}
                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                   >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </div>
                         </div>
                       </CardHeader>
@@ -623,9 +825,9 @@ export default function Vendors() {
                           </div>
                         )}
 
-                        {vendor.metadata?.contractValue && (
+                        {formatContractValue(vendor.metadata?.contractValue) && (
                           <div className="text-sm text-muted-foreground">
-                            <span className="font-medium">Value:</span> {vendor.metadata.contractValue}
+                            <span className="font-medium">Value:</span> {formatContractValue(vendor.metadata?.contractValue)}
                           </div>
                         )}
 
@@ -645,6 +847,70 @@ export default function Vendors() {
       
       {/* Global Floating AI Assistant */}
       <FloatingAIAssistant />
+
+      <Dialog open={isViewDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          closeViewDialog();
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{viewVendor?.value || "Vendor Details"}</DialogTitle>
+            <DialogDescription>Full vendor profile and contract information</DialogDescription>
+          </DialogHeader>
+          {isViewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : viewVendor ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Contact Person</p>
+                  <p className="font-medium">{viewVendor.metadata?.contactPerson || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Email</p>
+                  <p className="font-medium">{viewVendor.metadata?.email || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Phone</p>
+                  <p className="font-medium">{viewVendor.metadata?.phone || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Address</p>
+                  <p className="font-medium">{viewVendor.metadata?.address || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Contract Start</p>
+                  <p className="font-medium">{formatDateDisplay(viewVendor.metadata?.contractStartDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Contract End</p>
+                  <p className="font-medium">{formatDateDisplay(viewVendor.metadata?.contractEndDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Contract Type</p>
+                  <p className="font-medium">{viewVendor.metadata?.contractType || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Contract Value</p>
+                  <p className="font-medium">{formatContractValue(viewVendor.metadata?.contractValue) || "—"}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Notes</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                  {viewVendor.description || "No notes provided."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Unable to load vendor details.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

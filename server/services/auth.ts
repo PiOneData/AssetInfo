@@ -62,18 +62,12 @@ export const ROLES = {
 export const ROLE_HIERARCHY = [ROLES.TECHNICIAN, ROLES.IT_MANAGER, ROLES.ADMIN, ROLES.SUPER_ADMIN];
 
 export function checkPermission(userRole: string, requiredRole: string): boolean {
-  
   // Migrate old roles to new roles for backward compatibility
   const migratedUserRole = migrateRole(userRole);
   const migratedRequiredRole = migrateRole(requiredRole);
-  
-  // Special case: Both super-admin and admin have identical privileges across all features
-  // The only difference is in admin creation, which is handled by canAssignRole()
-  const normalizedUserRole = (migratedUserRole === ROLES.SUPER_ADMIN) ? ROLES.ADMIN : migratedUserRole as any;
-  const normalizedRequiredRole = (migratedRequiredRole === ROLES.SUPER_ADMIN) ? ROLES.ADMIN : migratedRequiredRole as any;
-  
-  const userLevel = ROLE_HIERARCHY.indexOf(normalizedUserRole as any);
-  const requiredLevel = ROLE_HIERARCHY.indexOf(normalizedRequiredRole as any);
+
+  const userLevel = ROLE_HIERARCHY.indexOf(migratedUserRole as any);
+  const requiredLevel = ROLE_HIERARCHY.indexOf(migratedRequiredRole as any);
   
   // Security guard: reject unknown roles to prevent privilege escalation
   if (userLevel === -1 || requiredLevel === -1) {

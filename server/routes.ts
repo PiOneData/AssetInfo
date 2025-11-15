@@ -55,7 +55,8 @@ import {
   type InviteUser,
   type AcceptInvitation,
   type UpdateUserRole,
-  type InsertEnrollmentToken
+  type InsertEnrollmentToken,
+  type User
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -64,6 +65,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: JWTPayload;
+      authUser?: User;
     }
   }
 }
@@ -112,27 +114,49 @@ function buildMinimalOAXml(input: {
 
 
 // Auth middleware
-const authenticateToken = (req: Request, res: Response, next: Function) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
+const authenticateToken = async (req: Request, res: Response, next: Function) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ message: "Access token required" });
+    if (!token) {
+      return res.status(401).json({ message: "Access token required" });
+    }
+
+    const payload = verifyToken(token);
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    const userRecord = await storage.getUser(payload.userId);
+    if (!userRecord || !userRecord.isActive) {
+      return res.status(401).json({ message: "Invalid authentication" });
+    }
+
+    req.user = {
+      ...payload,
+      role: userRecord.role,
+      tenantId: userRecord.tenantId,
+    };
+    req.authUser = userRecord;
+    next();
+  } catch (error) {
+    console.error("Authentication middleware error:", error);
+    return res.status(500).json({ message: "Authentication error" });
   }
-
-  const payload = verifyToken(token);
-  if (!payload) {
-    return res.status(401).json({ message: "Invalid or expired token" });
-  }
-
-  req.user = payload;
-  next();
 };
 
 // Middleware to validate authenticated user exists in database
 const validateUserExists = async (req: Request, res: Response, next: Function) => {
   try {
-    const user = await storage.getUser(req.user!.userId);
+    let user = req.authUser;
+    if (!user && req.user?.userId) {
+      user = await storage.getUser(req.user.userId);
+      if (user) {
+        req.authUser = user;
+      }
+    }
+
     if (!user || !user.isActive) {
       return res.status(401).json({ message: "Invalid authentication" });
     }
@@ -291,6 +315,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.warn("Failed to log auth activity:", auditError);
         }
         return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      if (!user.isActive) {
+        await auditLogger.logAuthActivity(
+          AuditActions.LOGIN,
+          email,
+          user.tenantId,
+          req,
+          false,
+          { reason: "account_deactivated" },
+          user.id,
+          user.role
+        );
+        return res.status(403).json({
+          success: false,
+          code: "ACCOUNT_DEACTIVATED",
+          message: "Your account has been deactivated. Please contact your administrator to reactivate your account.",
+        });
       }
 
       // Check if user must change password on first login
@@ -2457,8 +2499,62 @@ TENANT_NAME=${tenant.name}
     }
   });
 
+  app.delete("/api/users/me", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const authUser = req.authUser || (req.user?.userId ? await storage.getUser(req.user.userId) : null);
+      if (!authUser || authUser.tenantId !== req.user!.tenantId) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const tenantUsers = await storage.getTenantUsers(authUser.tenantId);
+      const otherActiveUsers = tenantUsers.filter((member) => member.isActive && member.id !== authUser.id);
+
+      if (authUser.role === "super-admin") {
+        const otherSuperAdmins = otherActiveUsers.filter((member) => member.role === "super-admin");
+        if (otherSuperAdmins.length === 0) {
+          return res.status(400).json({ message: "Cannot delete the last Super Admin account." });
+        }
+      }
+
+      const rolePriority: Record<string, number> = {
+        "super-admin": 0,
+        "admin": 1,
+        "it-manager": 2,
+        "technician": 3,
+      };
+
+      const fallbackUser = otherActiveUsers
+        .sort((a, b) => (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99))[0];
+
+      if (!fallbackUser) {
+        return res.status(400).json({ message: "Unable to delete account because no other active users exist in this organization." });
+      }
+
+      const deleted = await storage.deleteUserAndCleanup(authUser.id, authUser.tenantId, fallbackUser);
+      if (!deleted) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      await auditLogger.logActivity(
+        auditLogger.createUserContext(req),
+        {
+          action: AuditActions.USER_DELETE,
+          resourceType: ResourceTypes.USER,
+          resourceId: authUser.id,
+          description: "User deleted their own account",
+        },
+        req
+      );
+
+      res.json({ success: true, message: "Account deleted successfully." });
+    } catch (error) {
+      console.error("Error deleting user account:", error);
+      res.status(500).json({ message: "Failed to delete account" });
+    }
+  });
+
   // Organization Settings
-  app.get("/api/org/settings", authenticateToken, async (req: Request, res: Response) => {
+  app.get("/api/org/settings", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const tenant = await storage.getTenant(req.user!.tenantId);
       if (!tenant) {
@@ -2481,7 +2577,7 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.patch("/api/org/settings", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.patch("/api/org/settings", authenticateToken, requireRole("super-admin"), async (req: Request, res: Response) => {
     try {
       const settingsData: UpdateOrgSettings = updateOrgSettingsSchema.parse(req.body);
       
@@ -2575,7 +2671,7 @@ TENANT_NAME=${tenant.name}
   });
 
   // Vendors API routes
-  app.get("/api/vendors", authenticateToken, async (req: Request, res: Response) => {
+  const listVendorsHandler: RequestHandler = async (req, res) => {
     try {
       const vendors = await storage.getMasterData(req.user!.tenantId, "vendor");
       res.json(vendors);
@@ -2583,20 +2679,46 @@ TENANT_NAME=${tenant.name}
       console.error('Failed to fetch vendors:', error);
       res.status(500).json({ message: "Failed to fetch vendors" });
     }
+  };
+
+  app.get("/api/vendors", authenticateToken, requireRole("it-manager"), listVendorsHandler);
+  app.get("/api/vendors/list", authenticateToken, requireRole("it-manager"), listVendorsHandler);
+
+  app.get("/api/vendors/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
+    try {
+      const vendor = await storage.getMasterDataById(req.params.id, req.user!.tenantId);
+      if (!vendor) {
+        return res.status(404).json({ message: "Vendor not found" });
+      }
+      res.json(vendor);
+    } catch (error) {
+      console.error('Failed to fetch vendor:', error);
+      res.status(500).json({ message: "Failed to fetch vendor" });
+    }
   });
 
-  app.post("/api/vendors", authenticateToken, async (req: Request, res: Response) => {
+  app.post("/api/vendors", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
-      const { value, description } = req.body;
-      if (!value || value.trim() === '') {
-        return res.status(400).json({ message: "Vendor name is required" });
+      const parsed = vendorPayloadSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid vendor data" });
       }
 
-      const vendor = await storage.createMasterData({
+      let mapped;
+      try {
+        mapped = mapVendorPayloadToRecord(parsed.data);
+      } catch (mappingError: any) {
+        return res.status(400).json({ message: mappingError?.message || "Invalid vendor data" });
+      }
+
+      const vendor = await storage.addMasterData({
         type: "vendor",
-        value: value.trim(),
-        description: description || "",
-        tenantId: req.user!.tenantId
+        value: mapped.value,
+        description: mapped.description,
+        metadata: mapped.metadata,
+        tenantId: req.user!.tenantId,
+        createdBy: req.user!.userId,
+        isActive: true,
       });
 
       res.status(201).json(vendor);
@@ -2606,16 +2728,24 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.put("/api/vendors/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/vendors/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
-      const { value, description } = req.body;
-      if (!value || value.trim() === '') {
-        return res.status(400).json({ message: "Vendor name is required" });
+      const parsed = vendorPayloadSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid vendor data" });
+      }
+
+      let mapped;
+      try {
+        mapped = mapVendorPayloadToRecord(parsed.data);
+      } catch (mappingError: any) {
+        return res.status(400).json({ message: mappingError?.message || "Invalid vendor data" });
       }
 
       const vendor = await storage.updateMasterData(req.params.id, req.user!.tenantId, {
-        value: value.trim(),
-        description: description || ""
+        value: mapped.value,
+        description: mapped.description,
+        metadata: mapped.metadata,
       });
 
       if (!vendor) {
@@ -2629,7 +2759,7 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.delete("/api/vendors/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/vendors/:id", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const success = await storage.deleteMasterData(req.params.id, req.user!.tenantId);
       if (!success) {
@@ -3023,7 +3153,7 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.post("/api/assets", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.post("/api/assets", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const assetData = insertAssetSchema.parse({
         ...req.body,
@@ -3052,7 +3182,7 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.put("/api/assets/:id", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.put("/api/assets/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       // Get original asset for audit logging
       const originalAsset = await storage.getAsset(req.params.id, req.user!.tenantId);
@@ -3147,7 +3277,7 @@ TENANT_NAME=${tenant.name}
 
 
   // Download comprehensive CSV template with sample data
-  app.get("/api/assets/bulk/template", authenticateToken, requireRole("manager"), (req: Request, res: Response) => {
+  app.get("/api/assets/bulk/template", authenticateToken, requireRole("it-manager"), (req: Request, res: Response) => {
     const headers = [
       'name',
       'type',
@@ -3350,7 +3480,7 @@ TENANT_NAME=${tenant.name}
   });
 
   // Bulk upload endpoint
-  app.post("/api/assets/bulk/upload", authenticateToken, requireRole("manager"), upload.single('file'), async (req: Request, res: Response) => {
+  app.post("/api/assets/bulk/upload", authenticateToken, requireRole("it-manager"), upload.single('file'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -3645,7 +3775,7 @@ TENANT_NAME=${tenant.name}
 
 
   // AI Assistant routes
-  app.post("/api/ai/query", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.post("/api/ai/query", authenticateToken, async (req: Request, res: Response) => {
     try {
       const aiQuerySchema = z.object({
         prompt: z.string().min(1, "Prompt is required").max(2000, "Prompt too long")
@@ -3685,17 +3815,20 @@ TENANT_NAME=${tenant.name}
       };
 
       // Process query with AI
-      const aiResponse = await processITAMQuery(context);
+      const answer = await processITAMQuery(context);
+      const summary = answer
+        .split(/[\n\.]/)
+        .map((segment) => segment.trim())
+        .find((segment) => segment.length > 0)
+        || answer.slice(0, 140);
 
-      // Save the response to database with proper scoping
       const savedResponse = await storage.createAIResponse({
         prompt,
-        response: aiResponse,
+        response: answer,
         userId: req.user!.userId,
         tenantId: req.user!.tenantId
       });
 
-      // Log the AI query activity
       await storage.logActivity({
         action: "ai_query",
         resourceType: "ai_assistant",
@@ -3707,14 +3840,14 @@ TENANT_NAME=${tenant.name}
         tenantId: req.user!.tenantId
       });
 
-      res.json({ sessionId: savedResponse.id });
+      res.json({ answer, summary, sessionId: savedResponse.id });
     } catch (error) {
       console.error("AI query error:", error);
       res.status(500).json({ message: "Failed to process AI query" });
     }
   });
 
-  app.get("/api/ai/response/:sessionId", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.get("/api/ai/response/:sessionId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
       
@@ -3750,7 +3883,7 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.post("/api/licenses", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.post("/api/licenses", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const licenseData = insertSoftwareLicenseSchema.parse({
         ...req.body,
@@ -3898,67 +4031,244 @@ TENANT_NAME=${tenant.name}
     }
   });
 
+const CONTRACT_TYPE_VALUES = ["Annual", "Monthly", "One-time"] as const;
+
+const vendorPayloadSchema = z.object({
+  name: z.string().min(1, "Vendor name is required"),
+  contactPerson: z.string().optional(),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  notes: z.string().optional(),
+  contractStartDate: z.string().optional().or(z.literal("")),
+  contractEndDate: z.string().optional().or(z.literal("")),
+  contractValue: z.union([
+    z.number(),
+    z.string().min(1, "Contract value is required"),
+  ]),
+  contractType: z.enum(CONTRACT_TYPE_VALUES, {
+    required_error: "Contract type is required",
+  }),
+});
+
+const sanitizeOptionalString = (value?: string) => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const normalizeContractDate = (value?: string) => {
+  const normalized = sanitizeOptionalString(value);
+  if (!normalized) return undefined;
+  const parsedDate = new Date(normalized);
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new Error("Invalid contract date");
+  }
+  return parsedDate.toISOString();
+};
+
+const parseContractValue = (value: string | number) => {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new Error("Contract value must be a valid number");
+  }
+  if (numeric < 0) {
+    throw new Error("Contract value must be greater than or equal to 0");
+  }
+  return numeric;
+};
+
+const mapVendorPayloadToRecord = (payload: z.infer<typeof vendorPayloadSchema>) => {
+  const contractValue = parseContractValue(payload.contractValue);
+  const contractStartDate = normalizeContractDate(payload.contractStartDate);
+  const contractEndDate = normalizeContractDate(payload.contractEndDate);
+
+  const metadataSource = {
+    email: sanitizeOptionalString(payload.email),
+    phone: sanitizeOptionalString(payload.phone),
+    contactPerson: sanitizeOptionalString(payload.contactPerson),
+    address: sanitizeOptionalString(payload.address),
+    contractStartDate,
+    contractEndDate,
+    contractValue,
+    contractType: payload.contractType,
+  };
+
+  const metadata = Object.fromEntries(
+    Object.entries(metadataSource).filter(([, value]) => value !== undefined)
+  );
+
+  return {
+    value: payload.name.trim(),
+    description: sanitizeOptionalString(payload.notes),
+    metadata,
+  };
+};
+
+const allowedRecommendationTypes = new Map<string, string>([
+    ["license optimization", "License Optimization"],
+    ["license-optimization", "License Optimization"],
+    ["downgrade", "Cost Reduction"],
+    ["cost reduction", "Cost Reduction"],
+    ["cost-optimization", "Cost Reduction"],
+    ["upgrade", "Hardware Refresh"],
+    ["hardware refresh", "Hardware Refresh"],
+    ["security risk", "Security Risk"],
+    ["security", "Security Risk"],
+    ["reallocation", "Asset Consolidation"],
+    ["asset consolidation", "Asset Consolidation"],
+    ["asset utilization", "Asset Utilization"],
+    ["asset-utilization", "Asset Utilization"],
+    ["general", "General Optimization"],
+    ["general optimization", "General Optimization"],
+  ]);
+
+  const normalizeRecommendationType = (value?: string) => {
+    if (!value) return "General Optimization";
+    const key = value.toLowerCase().trim();
+    return allowedRecommendationTypes.get(key) || allowedRecommendationTypes.get(key.replace(/_/g, " ")) || "General Optimization";
+  };
+
+  const normalizeSeverity = (value?: string) => {
+    switch ((value || "").toLowerCase()) {
+      case "high":
+        return "high";
+      case "low":
+        return "low";
+      default:
+        return "medium";
+    }
+  };
+
+  const mapRecommendationResponse = (rec: s.Recommendation) => ({
+    ...rec,
+    type: normalizeRecommendationType(rec.type),
+    description: rec.description?.trim() || "No description available for this recommendation.",
+    severity: rec.priority || "medium",
+  });
+
+  const runRecommendationGeneration = async (tenantId: string) => {
+    const [assetsForTenant, licensesForTenant, ticketsForTenant, usersForTenant] = await Promise.all([
+      storage.getAllAssets(tenantId),
+      storage.getAllSoftwareLicenses(tenantId),
+      storage.getAllTickets(tenantId),
+      storage.getTenantUsers(tenantId),
+    ]);
+
+    if (!assetsForTenant.length || !licensesForTenant.length) {
+      return { status: "no-data", message: "Not enough ITAM data to generate recommendations.", recommendations: [] };
+    }
+
+    const utilizationResults = await Promise.all(
+      assetsForTenant.map((asset) => storage.getAssetUtilization(asset.id, tenantId))
+    );
+    const utilization = utilizationResults.flat();
+
+    const aiRecommendations = await generateAssetRecommendations({
+      assets: assetsForTenant,
+      licenses: licensesForTenant,
+      utilization,
+      tickets: ticketsForTenant,
+      users: usersForTenant,
+    });
+
+    if (!aiRecommendations.length) {
+      return { status: "no-data", message: "Not enough ITAM data to generate recommendations.", recommendations: [] };
+    }
+
+    const normalized = aiRecommendations
+      .map((rec, index) => ({
+        type: normalizeRecommendationType(rec.type),
+        title: rec.title?.trim() || `AI Insight ${index + 1}`,
+        description: rec.description?.trim() || "No description available for this recommendation.",
+        potentialSavings: Number(rec.potentialSavings || 0).toFixed(2),
+        priority: normalizeSeverity(rec.priority || rec.severity),
+        assetIds: Array.isArray(rec.assetIds) ? rec.assetIds : [],
+      }))
+      .filter((rec) => rec.title && rec.description);
+
+    if (!normalized.length) {
+      return { status: "no-data", message: "Not enough ITAM data to generate recommendations.", recommendations: [] };
+    }
+
+    await storage.deleteRecommendationsByTenant(tenantId);
+
+    const recommendations = await Promise.all(
+      normalized.map((rec) =>
+        storage.createRecommendation({
+          type: rec.type,
+          title: rec.title,
+          description: rec.description,
+          potentialSavings: rec.potentialSavings,
+          priority: rec.priority as any,
+          status: "pending",
+          assetIds: rec.assetIds,
+          tenantId,
+        })
+      )
+    );
+
+    return { status: "success", recommendations: recommendations.map(mapRecommendationResponse) };
+  };
+
   // Recommendations routes
   app.get("/api/recommendations", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { status } = req.query;
-      const recommendations = await storage.getRecommendations(
-        req.user!.tenantId, 
-        status as string
+      const recommendationsList = await storage.getRecommendations(
+        req.user!.tenantId,
+        typeof status === "string" ? status : undefined
       );
-      res.json(recommendations);
+      res.json(recommendationsList.map(mapRecommendationResponse));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch recommendations" });
     }
   });
 
-  app.post("/api/recommendations/generate", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.post("/api/recommendations/generate", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
     try {
-      const assets = await storage.getAssets(req.user!.tenantId);
-      const licenses = await storage.getAllSoftwareLicenses(req.user!.tenantId);
-      
-      // Get utilization data for all assets
-      const utilizationPromises = assets.map(asset => 
-        storage.getAssetUtilization(asset.id, req.user!.tenantId)
-      );
-      const utilizationResults = await Promise.all(utilizationPromises);
-      const utilization = utilizationResults.flat();
-
-      const aiRecommendations = await generateAssetRecommendations({
-        assets,
-        licenses,
-        utilization,
-      });
-
-      // Save recommendations to storage
-      const savedRecommendations = await Promise.all(
-        aiRecommendations.map(rec => 
-          storage.createRecommendation({
-            ...rec,
-            potentialSavings: rec.potentialSavings.toString(),
-            tenantId: req.user!.tenantId,
-          })
-        )
-      );
-
-      res.json(savedRecommendations);
+      const result = await runRecommendationGeneration(req.user!.tenantId);
+      res.json(result);
     } catch (error) {
       console.error("Error generating recommendations:", error);
       res.status(500).json({ message: "Failed to generate recommendations" });
     }
   });
 
-  app.put("/api/recommendations/:id", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.get("/api/ai/recommendations", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      const recommendationsList = await storage.getRecommendations(
+        req.user!.tenantId,
+        typeof status === "string" ? status : undefined
+      );
+      res.json(recommendationsList.map(mapRecommendationResponse));
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch recommendations" });
+    }
+  });
+
+  app.post("/api/ai/recommendations/run", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const result = await runRecommendationGeneration(req.user!.tenantId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error generating AI recommendations:", error);
+      res.status(500).json({ message: "Failed to generate AI recommendations" });
+    }
+  });
+
+  app.put("/api/recommendations/:id", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const { status } = req.body;
       if (!["pending", "accepted", "dismissed"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
 
-      const recommendation = await storage.updateRecommendation(
+      const recommendation = await storage.updateRecommendationStatus(
         req.params.id,
         req.user!.tenantId,
-        { status }
+        status
       );
 
       if (!recommendation) {
@@ -3971,12 +4281,28 @@ TENANT_NAME=${tenant.name}
     }
   });
 
+  app.delete("/api/recommendations/:id", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteRecommendation(req.params.id, req.user!.tenantId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Recommendation not found" });
+      }
+      res.json({ message: "Recommendation deleted" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete recommendation" });
+    }
+  });
+
   // Master Data routes
   app.get("/api/master", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { type, query } = req.query;
       if (!type || typeof type !== 'string') {
         return res.status(400).json({ message: "Master data type is required" });
+      }
+
+      if (type === "vendor" && !checkPermission(req.user!.role, "it-manager")) {
+        return res.status(403).json({ message: "Insufficient permissions" });
       }
 
       const masterData = await storage.getMasterData(
@@ -3990,7 +4316,7 @@ TENANT_NAME=${tenant.name}
     }
   });
 
-  app.post("/api/master", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.post("/api/master", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const rawType = typeof req.body?.type === "string" ? req.body.type.trim() : "";
       const rawValue = typeof req.body?.value === "string" ? req.body.value.trim() : "";
@@ -4313,7 +4639,7 @@ TENANT_NAME=${tenant.name}
   });
 
   // Get technicians for ticket assignment (Managers and Admins only)
-  app.get("/api/users/technicians", authenticateToken, requireRole("manager"), async (req: Request, res: Response) => {
+  app.get("/api/users/technicians", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const users = await storage.getTenantUsers(req.user!.tenantId);
       
@@ -4381,9 +4707,8 @@ TENANT_NAME=${tenant.name}
         return res.status(400).json({ message: "This email address is not available for registration" });
       }
 
-      // Generate secure temporary password
-      const temporaryPassword = generateSecurePassword(12); // Generate secure random password
-      const hashedPassword = await hashPassword(temporaryPassword);
+      const defaultPassword = process.env.DEFAULT_TEAM_PASSWORD || "admin123";
+      const hashedPassword = await hashPassword(defaultPassword);
 
       // Generate unique username from email (before @ symbol)
       const baseUsername = inviteData.email.split('@')[0];
@@ -4406,7 +4731,7 @@ TENANT_NAME=${tenant.name}
         role: inviteData.role,
         tenantId: req.user!.tenantId,
         invitedBy: req.user!.userId,
-        mustChangePassword: true, // Force password change on first login
+        mustChangePassword: false,
         isActive: true,
       });
 
@@ -4422,32 +4747,6 @@ TENANT_NAME=${tenant.name}
         description: `Created user account for ${inviteData.email} with role ${inviteData.role}`,
       });
 
-      // Get organization name for email
-      const adminUser = await storage.getUser(req.user!.userId);
-      const organizationName = adminUser?.firstName ? `${adminUser.firstName}'s Organization` : "Your Organization";
-      
-      // Send welcome email with credentials
-      const emailTemplate = createWelcomeEmailTemplate(
-        inviteData.firstName,
-        inviteData.lastName,
-        username,
-        temporaryPassword,
-        organizationName
-      );
-      
-      // Attempt to send email (non-blocking)
-      const emailSent = await sendEmail({
-        to: inviteData.email,
-        from: process.env.SENDGRID_FROM_EMAIL || "noreply@assetvault.com",
-        subject: emailTemplate.subject,
-        html: emailTemplate.html,
-        text: emailTemplate.text
-      });
-      
-      if (!emailSent) {
-        console.warn(`Failed to send welcome email to ${inviteData.email}`);
-      }
-
       // Return success response (don't include sensitive data)
       res.status(201).json({
         id: newUser.id,
@@ -4458,10 +4757,7 @@ TENANT_NAME=${tenant.name}
         role: newUser.role,
         isActive: newUser.isActive,
         mustChangePassword: newUser.mustChangePassword,
-        createdAt: newUser.createdAt,
-        message: emailSent 
-          ? "User account created successfully. Login credentials have been sent via email." 
-          : "User account created successfully. Please contact your administrator for login credentials."
+        createdAt: newUser.createdAt
       });
     } catch (error) {
       console.error("User creation error:", error);
@@ -4679,7 +4975,7 @@ TENANT_NAME=${tenant.name}
   }
 
   // Migration endpoint: Create default token if tenant doesn't have one
-  app.post("/api/enrollment-tokens/ensure-default", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.post("/api/enrollment-tokens/ensure-default", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const tenant = await storage.getTenant(req.user!.tenantId);
       if (!tenant) {
@@ -4735,7 +5031,7 @@ TENANT_NAME=${tenant.name}
   });
   
   // Create enrollment token
-  app.post("/api/enrollment-tokens", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.post("/api/enrollment-tokens", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const { name, description, maxUses, expiresAt } = req.body;
       
@@ -4781,7 +5077,7 @@ TENANT_NAME=${tenant.name}
   });
 
   // Get all enrollment tokens for tenant
-  app.get("/api/enrollment-tokens", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.get("/api/enrollment-tokens", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const tokens = await storage.getEnrollmentTokens(req.user!.tenantId);
       res.json(tokens);
@@ -4809,7 +5105,7 @@ TENANT_NAME=${tenant.name}
   });
 
   // Update enrollment token (activate/deactivate, change limits)
-  app.patch("/api/enrollment-tokens/:id", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.patch("/api/enrollment-tokens/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const tokenId = req.params.id;
       const { isActive, maxUses, expiresAt, name, description } = req.body;
@@ -4847,7 +5143,7 @@ TENANT_NAME=${tenant.name}
   });
 
   // Delete/revoke enrollment token
-  app.delete("/api/enrollment-tokens/:id", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+  app.delete("/api/enrollment-tokens/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
     try {
       const tokenId = req.params.id;
       
@@ -5634,10 +5930,12 @@ app.post("/api/assets/tni/bulk", async (req, res) => {
         return res.status(404).json({ message: "Ticket not found" });
       }
 
+      const elevatedRoles = ["super-admin", "admin", "it-manager"];
+      const isElevated = elevatedRoles.includes(user.role);
+      const isRequestor = existingTicket.requestorId === user.userId;
+      
       // Role-based access control
-      const canUpdate = user.role === "admin" || 
-                       user.role === "manager" ||
-                       existingTicket.requestorId === user.userId;
+      const canUpdate = isElevated || (isRequestor && user.role !== "technician");
       
       if (!canUpdate) {
         return res.status(403).json({ message: "Access denied" });
@@ -5725,11 +6023,10 @@ app.post("/api/assets/tni/bulk", async (req, res) => {
 
       console.log(`[Update Ticket Status] Ticket found - Requestor: ${existingTicket.requestorId}, Assigned To: ${existingTicket.assignedToId}`);
 
-      // Role-based access control - allow super-admin, admin, it-manager, and assigned technicians
+      // Role-based access control - allow super-admin, admin, and it-manager
       const canUpdateStatus = user.role === "super-admin" ||
                              user.role === "admin" || 
-                             user.role === "it-manager" ||
-                             (user.role === "technician" && existingTicket.assignedToId === user.userId);
+                             user.role === "it-manager";
       
       console.log(`[Update Ticket Status] Can update: ${canUpdateStatus} (role: ${user.role})`);
       
@@ -5786,11 +6083,15 @@ app.post("/api/assets/tni/bulk", async (req, res) => {
         return res.status(404).json({ message: "Ticket not found" });
       }
 
-      const canAccess = user.role === "super-admin" ||
-                       user.role === "admin" || 
-                       user.role === "it-manager" ||
-                       ticket.requestorId === user.userId ||
-                       (user.role === "technician" && ticket.assignedToId === user.userId);
+      const isTechnician = user.role === "technician";
+      const canAccess = isTechnician
+        ? ticket.assignedToId === user.userId
+        : (
+            user.role === "super-admin" ||
+            user.role === "admin" || 
+            user.role === "it-manager" ||
+            ticket.requestorId === user.userId
+          );
       
       if (!canAccess) {
         return res.status(403).json({ message: "Access denied" });
@@ -5816,11 +6117,13 @@ app.post("/api/assets/tni/bulk", async (req, res) => {
         return res.status(404).json({ message: "Ticket not found" });
       }
 
-      const canComment = user.role === "super-admin" ||
-                        user.role === "admin" || 
-                        user.role === "it-manager" ||
-                        ticket.requestorId === user.userId ||
-                        (user.role === "technician" && ticket.assignedToId === user.userId);
+      const isTechnician = user.role === "technician";
+      const canComment = !isTechnician && (
+        user.role === "super-admin" ||
+        user.role === "admin" || 
+        user.role === "it-manager" ||
+        ticket.requestorId === user.userId
+      );
       
       if (!canComment) {
         return res.status(403).json({ message: "Access denied" });
@@ -5864,6 +6167,10 @@ app.post("/api/assets/tni/bulk", async (req, res) => {
       const user = req.user!;
       const commentId = req.params.commentId;
       const { content } = req.body;
+
+      if (user.role === "technician") {
+        return res.status(403).json({ message: "Technicians cannot modify comments" });
+      }
       
       if (!content || content.trim().length === 0) {
         return res.status(400).json({ message: "Content is required" });
@@ -5886,6 +6193,10 @@ app.post("/api/assets/tni/bulk", async (req, res) => {
     try {
       const user = req.user!;
       const commentId = req.params.commentId;
+
+      if (user.role === "technician") {
+        return res.status(403).json({ message: "Technicians cannot modify comments" });
+      }
       
       const success = await storage.deleteTicketComment(commentId, user.tenantId);
       if (!success) {
@@ -5972,10 +6283,15 @@ app.get("/api/assets/:assetId/software", async (req, res) => {
         return res.status(404).json({ message: "Ticket not found" });
       }
 
-      const canAccess = user.role === "admin" || 
-                       user.role === "manager" ||
-                       ticket.requestorId === user.userId ||
-                       ticket.assignedToId === user.userId;
+      const isTechnician = user.role === "technician";
+      const canAccess = isTechnician
+        ? ticket.assignedToId === user.userId
+        : (
+            user.role === "super-admin" ||
+            user.role === "admin" ||
+            user.role === "it-manager" ||
+            ticket.requestorId === user.userId
+          );
       
       if (!canAccess) {
         return res.status(403).json({ message: "Access denied" });
