@@ -1601,6 +1601,7 @@ TENANT_NAME=${tenant.name}
         model: model,
         serialNumber: serial,
         status: "in-stock",
+        addedViaEnrollment: true,
 
         location: null,
         country: null,
@@ -1684,6 +1685,7 @@ TENANT_NAME=${tenant.name}
               assignedUserName: baseRow.assignedUserName,
               specifications: baseRow.specifications,
               notes: baseRow.notes,
+              addedViaEnrollment: true,
               updatedAt: now,
             },
           })
@@ -1712,6 +1714,7 @@ TENANT_NAME=${tenant.name}
             assignedUserName: baseRow.assignedUserName,
             specifications: baseRow.specifications,
             notes: baseRow.notes,
+            addedViaEnrollment: true,
             updatedAt: now,
           })
           .where(
@@ -1872,6 +1875,25 @@ TENANT_NAME=${tenant.name}
         return res.status(404).json({ error: "Asset not found" });
       }
 
+      const manualLinks = await storage.getAssetSoftwareLinks(assetId, row.tenantId);
+      const manualItems = manualLinks.map((link) => ({
+        id: link.id,
+        softwareAssetId: link.softwareAssetId,
+        name: link.softwareName,
+        version: link.softwareVersion,
+        manufacturer: link.softwareManufacturer,
+        assignedAt: link.createdAt,
+      }));
+
+      if (!row.addedViaEnrollment) {
+        return res.json({
+          status: "no-enrollment",
+          message:
+            "This device was not added through the tenant-specific enrollment link, so software inventory is unavailable.",
+          manualItems,
+        });
+      }
+
       // Be tolerant of different shapes
       const specs: any = (row as any)?.specifications ?? {};
       const oaId =
@@ -1881,16 +1903,12 @@ TENANT_NAME=${tenant.name}
         null;
 
       if (!oaId) {
-        return res.status(400).json({
-          error: "Asset has no Open-AudIT id",
-          details:
-            "Expected specifications.openaudit.id to be set (our OA sync should populate this).",
-        });
+        return res.json({ items: [], manualItems });
       }
 
       // Fetch software using shared OpenAudit credentials
       const items = await oaFetchDeviceSoftware(String(oaId));
-      return res.json({ items });
+      return res.json({ items, manualItems });
     } catch (e: any) {
       // Add server-side visibility
       console.error("[/api/assets/:assetId/software] failed:", e?.message ?? e);
@@ -1898,6 +1916,53 @@ TENANT_NAME=${tenant.name}
         error: "Failed to fetch software",
         details: e?.message ?? String(e),
       });
+    }
+  });
+
+  app.post("/api/assets/:assetId/software-links", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const deviceAssetId = req.params.assetId;
+      const softwareAssetId = typeof req.body?.softwareAssetId === "string" ? req.body.softwareAssetId : "";
+
+      if (!softwareAssetId) {
+        return res.status(400).json({ message: "softwareAssetId is required" });
+      }
+
+      const device = await storage.getAsset(deviceAssetId, tenantId);
+      if (!device) {
+        return res.status(404).json({ message: "Device not found" });
+      }
+
+      if ((device.type || "").toLowerCase() !== "hardware") {
+        return res.status(400).json({ message: "Software can only be assigned to hardware assets" });
+      }
+
+      const softwareAsset = await storage.getAsset(softwareAssetId, tenantId);
+      if (!softwareAsset || (softwareAsset.type || "").toLowerCase() !== "software") {
+        return res.status(400).json({ message: "Invalid software asset" });
+      }
+
+      try {
+        await storage.createAssetSoftwareLink({
+          tenantId,
+          assetId: deviceAssetId,
+          softwareAssetId,
+          createdBy: req.user!.userId,
+        });
+      } catch (err: any) {
+        if (err?.code !== "23505") {
+          throw err;
+        }
+      }
+
+      const manualLinks = await storage.getAssetSoftwareLinks(deviceAssetId, tenantId);
+      const link = manualLinks.find((item) => item.softwareAssetId === softwareAssetId) || null;
+
+      res.status(201).json({ link });
+    } catch (error) {
+      console.error("Failed to assign software:", error);
+      res.status(500).json({ message: "Failed to assign software to device" });
     }
   });
 
@@ -2081,6 +2146,8 @@ TENANT_NAME=${tenant.name}
 
       console.log(`[SOFTWARE DEVICES] Found ${allDevices.length} hardware devices to check`);
 
+      const manualDevices = await storage.getSoftwareLinkedDevices(softwareId, user.tenantId);
+
       // For each device, check if it has this software installed
       const devicesWithSoftware = [];
       
@@ -2133,9 +2200,21 @@ TENANT_NAME=${tenant.name}
         }
       }
 
-      console.log(`[SOFTWARE DEVICES] Total devices with software: ${devicesWithSoftware.length}`);
+      const deviceMap = new Map<string, Asset>();
+      for (const device of manualDevices) {
+        deviceMap.set(device.id, device);
+      }
+      for (const device of devicesWithSoftware) {
+        if (!deviceMap.has(device.id)) {
+          deviceMap.set(device.id, device);
+        }
+      }
 
-      return res.json({ devices: devicesWithSoftware, softwareName });
+      const mergedDevices = Array.from(deviceMap.values());
+
+      console.log(`[SOFTWARE DEVICES] Total devices with software: ${mergedDevices.length}`);
+
+      return res.json({ devices: mergedDevices, softwareName });
     } catch (e: any) {
       console.error("[/api/software/:id/devices] failed:", e?.message ?? e);
       return res.status(500).json({ error: "Failed to fetch devices", details: e?.message ?? String(e) });
@@ -6221,56 +6300,6 @@ app.get("/api/sync/status", (_req, res) => {
  * - Reads specifications.openaudit.id (with a few tolerant aliases)
  * - Calls oaFetchDeviceSoftware and returns normalized items
  */
-app.get("/api/assets/:assetId/software", async (req, res) => {
-  try {
-    const assetId = String(req.params.assetId);
-
-    // Load asset
-    const [row] = await db
-      .select()
-      .from(s.assets)
-      .where(eq(s.assets.id, assetId))
-      .limit(1);
-
-    if (!row) {
-      return res.status(404).json({ error: "Asset not found" });
-    }
-
-    // Be tolerant of different shapes
-    const specs: any = (row as any)?.specifications ?? {};
-    const oaId =
-      specs?.openaudit?.id ??
-      specs?.openaudit_id ??
-      specs?.oaId ??
-      null;
-
-    if (!oaId) {
-      // If OpenAudit ID is missing, return empty items array (not an error)
-      return res.json({ items: [] });
-    }
-
-      // Fetch software using shared OpenAudit credentials
-      try {
-        const items = await oaFetchDeviceSoftware(String(oaId));
-        return res.json({ items });
-      } catch (err: any) {
-        // If OA did not return software for any known endpoint, return empty list
-        if (err?.message?.includes("OA did not return software for any known endpoint")) {
-          return res.json({ items: [] });
-        }
-        // Otherwise, propagate error
-        throw err;
-      }
-  } catch (e: any) {
-    // Add server-side visibility
-    console.error("[/api/assets/:assetId/software] failed:", e?.message ?? e);
-    return res.status(500).json({
-      error: "Failed to fetch software",
-      details: e?.message ?? String(e),
-    });
-  }
-});
-
   // Get ticket activities
   app.get("/api/tickets/:id/activities", authenticateToken, async (req: Request, res: Response) => {
     try {

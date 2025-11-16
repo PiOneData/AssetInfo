@@ -3,12 +3,38 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { authenticatedRequest } from "@/lib/auth";
 
 type Props = {
   assetId: string;   // our ITAM asset id for the device
   tenantId: string;  // current tenant (from auth/session)
+  canAssignSoftware?: boolean;
 };
+
+type OAItem = { name: string; version?: string | null; publisher?: string | null };
+
+type ManualSoftwareItem = {
+  id: string;
+  softwareAssetId: string;
+  name: string;
+  version?: string | null;
+  manufacturer?: string | null;
+  assignedAt?: string | null;
+};
+
+type DeviceSoftwareResponse =
+  | {
+      items: OAItem[];
+      manualItems?: ManualSoftwareItem[];
+    }
+  | {
+      status: "no-enrollment";
+      message: string;
+      manualItems?: ManualSoftwareItem[];
+    };
 
 // "system" publishers to ignore by default
 const DEFAULT_IGNORES = [
@@ -20,7 +46,7 @@ const DEFAULT_IGNORES = [
   "Adobe Systems, Inc. (system)",
 ];
 
-export function DeviceSoftware({ assetId, tenantId }: Props) {
+export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -28,6 +54,9 @@ export function DeviceSoftware({ assetId, tenantId }: Props) {
   const [hideVendors, setHideVendors] = useState(true);
   const [ignorePublishers, setIgnorePublishers] = useState<string[]>(DEFAULT_IGNORES);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [selectedSoftwareId, setSelectedSoftwareId] = useState<string>("");
+
 
   // Fetch software list for this device (our server -> OA)
   const {
@@ -36,28 +65,72 @@ export function DeviceSoftware({ assetId, tenantId }: Props) {
     isError,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<DeviceSoftwareResponse>({
     queryKey: ["deviceSoftware", assetId],
     queryFn: async () => {
-      const r = await fetch(`/api/assets/${assetId}/software`);
-      const text = await r.text();
-      if (!r.ok) {
-        try {
-          const j = JSON.parse(text);
-          throw new Error(j.details || j.error || text || "Failed to load software");
-        } catch {
-          throw new Error(text || "Failed to load software");
-        }
+      const response = await authenticatedRequest("GET", `/api/assets/${assetId}/software`);
+      let payload: any = null;
+      try {
+        payload = await response.json();
+      } catch {
+        // ignore JSON parse error, handled below
       }
-      return JSON.parse(text) as {
-        items: Array<{ name: string; version?: string | null; publisher?: string | null }>;
-      };
+
+      if (!response.ok) {
+        const message =
+          payload?.details || payload?.error || "Failed to load software";
+        throw new Error(message);
+      }
+
+      if (payload === null) {
+        return { items: [] } as DeviceSoftwareResponse;
+      }
+
+      return payload as DeviceSoftwareResponse;
     },
   });
 
+  const {
+    data: assignableSoftware = [],
+    isLoading: isSoftwareListLoading,
+    isError: isSoftwareListError,
+    error: softwareListError,
+  } = useQuery({
+    queryKey: ["assignableSoftwareAssets"],
+    queryFn: async () => {
+      const response = await authenticatedRequest("GET", "/api/assets?type=Software");
+      return response.json();
+    },
+    enabled: canAssignSoftware && isAssignDialogOpen,
+  });
+
+  React.useEffect(() => {
+    if (
+      isAssignDialogOpen &&
+      Array.isArray(assignableSoftware) &&
+      assignableSoftware.length > 0 &&
+      !selectedSoftwareId
+    ) {
+      setSelectedSoftwareId(assignableSoftware[0].id);
+    }
+  }, [isAssignDialogOpen, assignableSoftware, selectedSoftwareId]);
+
+  const isNoEnrollment = data && "status" in data && data.status === "no-enrollment";
+  const manualItems: ManualSoftwareItem[] = React.useMemo(() => {
+    if (!data) return [];
+    if ("manualItems" in data && Array.isArray(data.manualItems)) {
+      return data.manualItems;
+    }
+    return [];
+  }, [data]);
+
   // Filter + de-duplicate
   const items = useMemo(() => {
-    let arr = data?.items ?? [];
+    if (!data || "status" in data) {
+      return [];
+    }
+
+    let arr = data.items ?? [];
 
     if (hideVendors) {
       const ignoresLower = ignorePublishers.map((p) => p.toLowerCase());
@@ -92,13 +165,8 @@ export function DeviceSoftware({ assetId, tenantId }: Props) {
 
   const importMutation = useMutation({
     mutationFn: async (payload: { tenantId: string; deviceAssetId?: string; items: any[] }) => {
-      const r = await fetch(`/api/software/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      return r.json();
+      const response = await authenticatedRequest("POST", `/api/software/import`, payload);
+      return response.json();
     },
     onSuccess: (resp) => {
       toast({
@@ -116,6 +184,43 @@ export function DeviceSoftware({ assetId, tenantId }: Props) {
       });
     },
   });
+
+  const assignSoftwareMutation = useMutation({
+    mutationFn: async (softwareAssetId: string) => {
+      const response = await authenticatedRequest("POST", `/api/assets/${assetId}/software-links`, {
+        softwareAssetId,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Software assigned",
+        description: "The selected software asset has been linked to this device.",
+      });
+      setIsAssignDialogOpen(false);
+      setSelectedSoftwareId("");
+      qc.invalidateQueries({ queryKey: ["deviceSoftware", assetId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to assign software",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAssignSoftware = () => {
+    if (!selectedSoftwareId) {
+      toast({
+        title: "Select software",
+        description: "Please choose a software asset to assign.",
+        variant: "destructive",
+      });
+      return;
+    }
+    assignSoftwareMutation.mutate(selectedSoftwareId);
+  };
 
   const toggle = (key: string) =>
     setSelected((s) => ({ ...s, [key]: !s[key] }));
@@ -147,7 +252,16 @@ export function DeviceSoftware({ assetId, tenantId }: Props) {
     );
   }
 
-  return (
+  const oaContent = isNoEnrollment ? (
+    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground bg-muted/40">
+      <p>
+        This device was not added through the tenant-specific enrollment link, so software inventory is unavailable.
+      </p>
+      <p className="mt-2">
+        To automatically view installed software, please add this device via the enrollment link.
+      </p>
+    </div>
+  ) : (
     // constrain the modal content height so the list can scroll
     <div className="space-y-3 w-full max-w-3xl max-h-[80vh] overflow-auto">
       <div className="flex items-center gap-2">
@@ -228,6 +342,114 @@ export function DeviceSoftware({ assetId, tenantId }: Props) {
           Add to Software Inventory
         </Button>
       </div>
+    </div>
+  );
+
+  const manualSection = (
+    <div className="space-y-2">
+      <div className="text-sm font-medium">Manually assigned software</div>
+      {manualItems.length ? (
+        <div className="rounded-md border overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="text-left p-2">Name</th>
+                <th className="text-left p-2">Version</th>
+                <th className="text-left p-2">Publisher</th>
+                <th className="text-left p-2">Assigned</th>
+              </tr>
+            </thead>
+            <tbody>
+              {manualItems.map((item) => (
+                <tr key={item.id} className="border-t">
+                  <td className="p-2">{item.name}</td>
+                  <td className="p-2">{item.version ?? "-"}</td>
+                  <td className="p-2">{item.manufacturer ?? "-"}</td>
+                  <td className="p-2 text-muted-foreground">
+                    {item.assignedAt ? new Date(item.assignedAt).toLocaleString() : "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          No software has been manually assigned to this device yet.
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {canAssignSoftware && (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={() => setIsAssignDialogOpen(true)}>
+            Assign Software to this Device
+          </Button>
+        </div>
+      )}
+      {oaContent}
+      {manualSection}
+
+      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Software</DialogTitle>
+            <DialogDescription>
+              Select a software asset from your inventory to link to this device.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isSoftwareListLoading ? (
+            <p className="text-sm text-muted-foreground">Loading software assets…</p>
+          ) : isSoftwareListError ? (
+            <p className="text-sm text-red-500">
+              {softwareListError instanceof Error
+                ? softwareListError.message
+                : "Failed to load software assets"}
+            </p>
+          ) : assignableSoftware.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No software assets available. Add software records first from the Assets page.
+            </p>
+          ) : (
+            <Select value={selectedSoftwareId} onValueChange={setSelectedSoftwareId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select software" />
+              </SelectTrigger>
+              <SelectContent>
+                {assignableSoftware.map((software: any) => (
+                  <SelectItem key={software.id} value={software.id}>
+                    {software.name}
+                    {software.version ? ` • v${software.version}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAssignDialogOpen(false);
+                setSelectedSoftwareId("");
+              }}
+              disabled={assignSoftwareMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignSoftware}
+              disabled={!selectedSoftwareId || assignSoftwareMutation.isPending}
+            >
+              {assignSoftwareMutation.isPending ? "Assigning…" : "Assign Software"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

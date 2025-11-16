@@ -147,11 +147,11 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
     lastSeen: false,
     // Software-specific
     version: true,
-    licenseType: true,
-    licenseKey: false, // Hidden by default for security
-    renewalDate: true,
-    // Location & Assignment
-    location: true,
+  licenseType: true,
+  licenseKey: false, // Hidden by default for security
+  renewalDate: true,
+  // Location & Assignment
+  location: true,
     assignedUserName: true,
     assignedUserEmail: true,
     assignedUserEmployeeId: true,
@@ -322,8 +322,11 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
     }
   };
 
-  const visibleColumns = Object.entries(columnVisibility).filter(([_, visible]) => visible).map(([key, _]) => key);
-  const columnCount = visibleColumns.length;
+const visibleColumns = Object.entries(columnVisibility)
+  .filter(([_, visible]) => visible)
+  .map(([key]) => key);
+const columnCount = visibleColumns.length;
+const totalColumnCount = columnCount + 1; // include View Devices column
 
   // Group assets by type
   const groupedAssets = useMemo(() => {
@@ -653,6 +656,12 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
                   </th>
                 )}
 
+                {columnVisibility.viewDevices && (
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[140px]">
+                    View Devices
+                  </th>
+                )}
+
                 {/* Hardware-specific columns - only show if there are Hardware assets */}
                 {columnVisibility.ipAddress && processedAssets.some((a: any) => a.type === "Hardware") && (
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[130px]">
@@ -931,15 +940,12 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
                   </th>
                 )}
 
-                {/* Show "Installed On" header for Software type */}
-                {assets.some((a: any) => a.type === "Software") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[140px]">
-                    <div className="flex items-center space-x-2">
-                      <Monitor className="h-4 w-4 mr-1" />
-                      Installed On
-                    </div>
-                  </th>
-                )}
+                <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[140px]">
+                  <div className="flex items-center space-x-2">
+                    <Monitor className="h-4 w-4 mr-1" />
+                    View Devices
+                  </div>
+                </th>
 
                 {columnVisibility.actions && (
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm w-24">
@@ -1242,15 +1248,15 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
                       </td>
                     )}
 
-                    {/* Show "Installed On" column for Software type */}
-                    {asset.type === "Software" && (
-                      <td className="py-3 px-4">
-                        <SoftwareDevices 
-                          softwareId={asset.id} 
-                          softwareName={asset.name} 
-                        />
-                      </td>
-                    )}
+                    <td className="py-3 px-4 text-center">
+                      {asset.type === "Software" ? (
+                        <div className="flex justify-center">
+                          <SoftwareDevices softwareId={asset.id} softwareName={asset.name} />
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">–</span>
+                      )}
+                    </td>
 
                     {columnVisibility.actions && (
                       <td className="py-3 px-4">
@@ -1293,7 +1299,7 @@ function EnhancedAssetsTable({ assets, isLoading, onEditAsset, onDeleteAsset, on
               
               {processedAssets.length === 0 && (
                 <tr>
-                  <td colSpan={columnCount} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={totalColumnCount} className="py-12 text-center text-muted-foreground">
                     <div className="flex flex-col items-center space-y-2">
                       <Monitor className="h-12 w-12 text-muted-foreground/50" />
                       <p>No assets found</p>
@@ -2087,6 +2093,7 @@ export default function Assets() {
                   <DeviceSoftware
                     assetId={viewingAsset.id}
                     tenantId={(viewingAsset as any).tenantId}
+                    canAssignSoftware={permissions.isAdmin || permissions.isSuperAdmin}
                   />
                 ) : (
                   <div className="text-sm text-muted-foreground">No asset selected.</div>

@@ -110,6 +110,7 @@ export const assets = pgTable(
     // Company information
     companyName: text("company_name"),
     companyGstNumber: text("company_gst_number"),
+    addedViaEnrollment: boolean("added_via_enrollment").notNull().default(false),
 
     tenantId: varchar("tenant_id").notNull(),
     createdAt: timestamp("created_at").defaultNow(),
@@ -156,6 +157,17 @@ export const assetUtilization = pgTable("asset_utilization", {
   recordedAt: timestamp("recorded_at").defaultNow(),
   tenantId: varchar("tenant_id").notNull(),
 });
+
+export const assetSoftwareLinks = pgTable("asset_software_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull(),
+  assetId: varchar("asset_id").notNull(),
+  softwareAssetId: varchar("software_asset_id").notNull(),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqAssetSoftwareLink: uniqueIndex("uniq_asset_software_link").on(table.tenantId, table.assetId, table.softwareAssetId),
+}));
 
 export const recommendations = pgTable("recommendations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -431,6 +443,8 @@ export type SoftwareLicense = typeof softwareLicenses.$inferSelect;
 export type InsertSoftwareLicense = z.infer<typeof insertSoftwareLicenseSchema>;
 export type AssetUtilization = typeof assetUtilization.$inferSelect;
 export type InsertAssetUtilization = z.infer<typeof insertAssetUtilizationSchema>;
+export type AssetSoftwareLink = typeof assetSoftwareLinks.$inferSelect;
+export type InsertAssetSoftwareLink = typeof assetSoftwareLinks.$inferInsert;
 export type Recommendation = typeof recommendations.$inferSelect;
 export type InsertRecommendation = z.infer<typeof insertRecommendationSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;

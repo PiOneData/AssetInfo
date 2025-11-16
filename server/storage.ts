@@ -9,6 +9,8 @@ import {
   type InsertSoftwareLicense,
   type AssetUtilization,
   type InsertAssetUtilization,
+  type AssetSoftwareLink,
+  type InsertAssetSoftwareLink,
   type Recommendation,
   type InsertRecommendation,
   type AIResponse,
@@ -39,6 +41,7 @@ import {
   users,
   tenants,
   assets,
+  assetSoftwareLinks,
   softwareLicenses,
   assetUtilization,
   recommendations,
@@ -57,7 +60,8 @@ import {
 import { randomUUID } from "crypto";
 import { hashPassword } from "./services/auth";
 import { db } from "./db";
-import { eq, and, or, desc, sql, ilike, isNotNull, ne, gt } from "drizzle-orm";
+import { eq, and, or, desc, sql, ilike, isNotNull, ne, gt, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { normalizeEmail, normalizeName, generateNextUserID } from "@shared/utils";
 
 export interface IStorage {
@@ -111,6 +115,16 @@ export interface IStorage {
   createAssetsBulk(assets: InsertAsset[]): Promise<Asset[]>;
   updateAsset(id: string, tenantId: string, asset: Partial<InsertAsset>): Promise<Asset | undefined>;
   deleteAsset(id: string, tenantId: string): Promise<boolean>;
+  getAssetSoftwareLinks(assetId: string, tenantId: string): Promise<Array<{
+    id: string;
+    softwareAssetId: string;
+    softwareName: string;
+    softwareVersion: string | null;
+    softwareManufacturer: string | null;
+    createdAt: Date | null;
+  }>>;
+  createAssetSoftwareLink(link: InsertAssetSoftwareLink): Promise<AssetSoftwareLink>;
+  getSoftwareLinkedDevices(softwareAssetId: string, tenantId: string): Promise<Asset[]>;
 
   // Software Licenses
   getAllSoftwareLicenses(tenantId: string): Promise<SoftwareLicense[]>;
@@ -752,6 +766,61 @@ export class DatabaseStorage implements IStorage {
       .delete(assets)
       .where(and(eq(assets.id, id), eq(assets.tenantId, tenantId)));
     return (result.rowCount || 0) > 0;
+  }
+
+  async getAssetSoftwareLinks(assetId: string, tenantId: string) {
+    const softwareAssets = alias(assets, "software_assets");
+
+    const rows = await db
+      .select({
+        id: assetSoftwareLinks.id,
+        softwareAssetId: assetSoftwareLinks.softwareAssetId,
+        softwareName: softwareAssets.name,
+        softwareVersion: softwareAssets.version,
+        softwareManufacturer: softwareAssets.manufacturer,
+        createdAt: assetSoftwareLinks.createdAt,
+      })
+      .from(assetSoftwareLinks)
+      .innerJoin(
+        softwareAssets,
+        and(
+          eq(assetSoftwareLinks.softwareAssetId, softwareAssets.id),
+          eq(softwareAssets.tenantId, tenantId)
+        )
+      )
+      .where(and(eq(assetSoftwareLinks.assetId, assetId), eq(assetSoftwareLinks.tenantId, tenantId)));
+
+    return rows.map((row) => ({
+      id: row.id,
+      softwareAssetId: row.softwareAssetId,
+      softwareName: row.softwareName || "Untitled Software",
+      softwareVersion: row.softwareVersion ?? null,
+      softwareManufacturer: row.softwareManufacturer ?? null,
+      createdAt: row.createdAt ?? null,
+    }));
+  }
+
+  async createAssetSoftwareLink(link: InsertAssetSoftwareLink): Promise<AssetSoftwareLink> {
+    const [newLink] = await db.insert(assetSoftwareLinks).values(link).returning();
+    return newLink;
+  }
+
+  async getSoftwareLinkedDevices(softwareAssetId: string, tenantId: string): Promise<Asset[]> {
+    const linkedAssets = await db
+      .select({ deviceId: assetSoftwareLinks.assetId })
+      .from(assetSoftwareLinks)
+      .where(and(eq(assetSoftwareLinks.softwareAssetId, softwareAssetId), eq(assetSoftwareLinks.tenantId, tenantId)));
+
+    if (!linkedAssets.length) {
+      return [];
+    }
+
+    const deviceIds = linkedAssets.map((link) => link.deviceId);
+
+    return await db
+      .select()
+      .from(assets)
+      .where(and(eq(assets.tenantId, tenantId), eq(assets.type, "Hardware"), inArray(assets.id, deviceIds)));
   }
 
   // Software Licenses
