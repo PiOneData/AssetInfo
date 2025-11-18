@@ -5,6 +5,7 @@ import { TopBar } from "@/components/layout/topbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authenticatedRequest } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +22,8 @@ import {
   XCircle,
   Clock,
   Sparkles,
-  Trash2
+  Trash2,
+  Info
 } from "lucide-react";
 import type { Recommendation } from "@shared/schema";
 
@@ -37,6 +39,13 @@ const RECOMMENDATION_TYPES = [
 
 type RecommendationRecord = Recommendation & { severity?: string };
 
+const CLEAN_TITLE_REGEX = /^optimization recommendation\s*\d*[:\-]?\s*/i;
+
+const cleanRecommendationTitle = (title?: string) => {
+  if (!title) return "AI Recommendation";
+  return title.replace(CLEAN_TITLE_REGEX, "").trim() || title;
+};
+
 export default function Recommendations() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -45,6 +54,8 @@ export default function Recommendations() {
   const { toast } = useToast();
   const { user } = useAuth();
   const permissions = getRolePermissions(user?.role);
+  const [selectedRecommendation, setSelectedRecommendation] = useState<RecommendationRecord | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   // Fetch recommendations
   const { data: recommendations = [], isLoading } = useQuery<RecommendationRecord[]>({
@@ -266,6 +277,16 @@ export default function Recommendations() {
     deleteRecommendationMutation.mutate(id);
   };
 
+  const handleViewDetails = (rec: RecommendationRecord) => {
+    setSelectedRecommendation(rec);
+    setIsDetailsOpen(true);
+  };
+
+  const handleCloseDetails = () => {
+    setIsDetailsOpen(false);
+    setSelectedRecommendation(null);
+  };
+
   // Filter recommendations
   const filteredRecommendations = recommendations.filter((rec: RecommendationRecord) => {
     if (typeFilter !== "all" && rec.type !== typeFilter) return false;
@@ -401,7 +422,7 @@ export default function Recommendations() {
           )}
 
           {/* Recommendations List */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             {filteredRecommendations.map((recommendation: RecommendationRecord) => {
               const Icon = getRecommendationIcon(recommendation.type || "");
               const iconColorClass = getIconColor(recommendation.type || "");
@@ -415,53 +436,54 @@ export default function Recommendations() {
                 : "Unknown";
               const canModify = permissions.canGenerateAIRecommendations;
               const isPending = recommendation.status === "pending";
+              const title = cleanRecommendationTitle(recommendation.title);
+              const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
               
               return (
-                <Card key={recommendation.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-4 flex-1">
-                        <div className={`w-12 h-12 ${iconColorClass} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                          <Icon className="h-6 w-6" />
-                        </div>
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-lg font-semibold text-foreground">
-                              {recommendation.title}
-                            </h3>
-                            <Badge className={`text-xs ${getPriorityColor(severity)}`}>
-                              Severity: {severity}
-                            </Badge>
-                            <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${statusColorClass}`}>
+                <Card
+                  key={recommendation.id}
+                  className="border border-border/70 bg-background/70 backdrop-blur-sm rounded-2xl shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5"
+                >
+                  <CardContent className="p-5 md:p-6 space-y-4">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 ${iconColorClass} rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner`}>
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-start gap-3 justify-between">
+                          <div className="flex flex-col gap-1">
+                            <h3 className="text-lg font-semibold text-foreground leading-snug">{title}</h3>
+                            <div className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs ${statusColorClass}`}>
                               <StatusIcon className="h-3 w-3" />
-                              <span className="capitalize">{recommendation.status}</span>
+                              <span className="capitalize tracking-wide">{recommendation.status}</span>
                             </div>
                           </div>
-                          
-                          <p className="text-muted-foreground mb-3">
-                            {description}
-                          </p>
-                          
-                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                            <span className="capitalize">Type: {typeLabel}</span>
-                            {recommendation.potentialSavings && parseFloat(recommendation.potentialSavings) > 0 && (
-                              <span className="text-secondary font-medium">
-                                Potential savings: ${parseFloat(recommendation.potentialSavings).toLocaleString()}
-                              </span>
-                            )}
-                            <span>Generated: {generatedAt}</span>
-                          </div>
+                          <Badge className={`text-xs tracking-wide ${getPriorityColor(severity)}`}>
+                            Severity: {severityLabel}
+                          </Badge>
                         </div>
+                        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                          {description}
+                        </p>
                       </div>
-                      
-                      <div className="flex items-center space-x-2 ml-4">
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground/90 uppercase tracking-wide">
+                        <span className="capitalize">{typeLabel}</span>
+                        <span>Generated {generatedAt}</span>
+                        {recommendation.potentialSavings && parseFloat(recommendation.potentialSavings) > 0 && (
+                          <span className="normal-case text-secondary font-medium">
+                            Potential savings ${parseFloat(recommendation.potentialSavings).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         {isPending && (
                           <>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 border-blue-500 text-blue-600 hover:bg-blue-50"
+                              className="h-8 border-blue-500/60 text-blue-500 hover:bg-blue-500/10"
                               onClick={() => handleAcceptRecommendation(recommendation.id)}
                               disabled={updateRecommendationMutation.isPending || !canModify}
                               data-testid={`button-accept-${recommendation.id}`}
@@ -471,7 +493,7 @@ export default function Recommendations() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 border-muted text-muted-foreground hover:bg-muted/20"
+                              className="h-8 border-muted text-muted-foreground hover:bg-muted/20"
                               onClick={() => handleDismissRecommendation(recommendation.id)}
                               disabled={updateRecommendationMutation.isPending || !canModify}
                               data-testid={`button-dismiss-${recommendation.id}`}
@@ -480,6 +502,15 @@ export default function Recommendations() {
                             </Button>
                           </>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => handleViewDetails(recommendation)}
+                        >
+                          <Info className="h-4 w-4 mr-2" />
+                          View Details
+                        </Button>
                         {canModify && (
                           <Button
                             type="button"
@@ -488,8 +519,9 @@ export default function Recommendations() {
                             onClick={() => handleDeleteRecommendation(recommendation.id)}
                             disabled={deleteRecommendationMutation.isPending}
                             data-testid={`button-delete-${recommendation.id}`}
+                            className="text-muted-foreground hover:text-destructive"
                           >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
                       </div>
@@ -527,6 +559,85 @@ export default function Recommendations() {
               </Card>
             )}
           </div>
+
+          <Dialog open={isDetailsOpen && !!selectedRecommendation} onOpenChange={(open) => {
+            if (!open) {
+              handleCloseDetails();
+            } else if (selectedRecommendation) {
+              setIsDetailsOpen(true);
+            }
+          }}>
+            {selectedRecommendation && (
+              <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle className="flex items-start gap-3">
+                    <div className={`p-2 rounded-lg ${getIconColor(selectedRecommendation.type || "")}`}>
+                      {(() => {
+                        const Icon = getRecommendationIcon(selectedRecommendation.type || "");
+                        return <Icon className="h-5 w-5" />;
+                      })()}
+                    </div>
+                    <div className="flex-1">
+                      <span className="block text-sm text-muted-foreground uppercase tracking-wide">
+                        {selectedRecommendation.type || "General Optimization"}
+                      </span>
+                      {cleanRecommendationTitle(selectedRecommendation.title)}
+                    </div>
+                    <Badge className={`text-xs ${getPriorityColor((selectedRecommendation.severity || selectedRecommendation.priority || "medium").toLowerCase())}`}>
+                      Severity {selectedRecommendation.severity || selectedRecommendation.priority || "medium"}
+                    </Badge>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Generated {selectedRecommendation.generatedAt ? new Date(selectedRecommendation.generatedAt).toLocaleString() : "Unknown"}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">
+                    {selectedRecommendation.description?.trim() || "No description available for this recommendation."}
+                  </p>
+                  {selectedRecommendation.potentialSavings && parseFloat(selectedRecommendation.potentialSavings) > 0 && (
+                    <div className="text-sm text-secondary font-medium">
+                      Potential savings ${parseFloat(selectedRecommendation.potentialSavings).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-border/60">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Status: <span className="capitalize">{selectedRecommendation.status}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedRecommendation.status === "pending" && permissions.canGenerateAIRecommendations && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            handleAcceptRecommendation(selectedRecommendation.id);
+                            handleCloseDetails();
+                          }}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            handleDismissRecommendation(selectedRecommendation.id);
+                            handleCloseDetails();
+                          }}
+                        >
+                          Dismiss
+                        </Button>
+                      </>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={handleCloseDetails}>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            )}
+          </Dialog>
         </div>
       </main>
     </div>

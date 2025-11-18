@@ -46,9 +46,21 @@ function safeJsonParse<T = any>(payload: string): T | null {
   }
 }
 
+function formatLabel(value?: string | null) {
+  if (!value) return "Unspecified";
+  return value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 function summarizeAssets(assets: Asset[]) {
   const typeCounts = assets.reduce<Record<string, number>>((acc, asset) => {
-    acc[asset.type || "Unknown"] = (acc[asset.type || "Unknown"] || 0) + 1;
+    const typeKey = formatLabel(asset.type) || "Unknown";
+    acc[typeKey] = (acc[typeKey] || 0) + 1;
     return acc;
   }, {});
 
@@ -61,6 +73,32 @@ function summarizeAssets(assets: Asset[]) {
     const key = asset.country && asset.city ? `${asset.city}, ${asset.country}` :
       asset.country || asset.location || "Unspecified";
     acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const categoryCounts = assets.reduce<Record<string, number>>((acc, asset) => {
+    const categoryKey = formatLabel(asset.category) || formatLabel(asset.type) || "Uncategorized";
+    acc[categoryKey] = (acc[categoryKey] || 0) + 1;
+    return acc;
+  }, {});
+
+  const categoryStatusMap = assets.reduce<Record<string, Record<string, number>>>((acc, asset) => {
+    const categoryKey = formatLabel(asset.category) || formatLabel(asset.type) || "Uncategorized";
+    const statusKey = (asset.status || "unknown").toLowerCase();
+    if (!acc[categoryKey]) {
+      acc[categoryKey] = {};
+    }
+    acc[categoryKey][statusKey] = (acc[categoryKey][statusKey] || 0) + 1;
+    return acc;
+  }, {});
+
+  const typeStatusMap = assets.reduce<Record<string, Record<string, number>>>((acc, asset) => {
+    const typeKey = formatLabel(asset.type) || "Unknown";
+    const statusKey = (asset.status || "unknown").toLowerCase();
+    if (!acc[typeKey]) {
+      acc[typeKey] = {};
+    }
+    acc[typeKey][statusKey] = (acc[typeKey][statusKey] || 0) + 1;
     return acc;
   }, {});
 
@@ -89,12 +127,31 @@ function summarizeAssets(assets: Asset[]) {
   return {
     typeCounts,
     statusCounts,
+    categoryCounts,
+    categoryStatusBreakdown: Object.entries(categoryStatusMap)
+      .map(([category, statuses]) => ({
+        category,
+        total: Object.values(statuses).reduce((sum, value) => sum + value, 0),
+        statuses,
+      })),
+    typeStatusBreakdown: Object.entries(typeStatusMap)
+      .map(([type, statuses]) => ({
+        type,
+        total: Object.values(statuses).reduce((sum, value) => sum + value, 0),
+        statuses,
+      })),
     locationCounts: Object.entries(locationCounts).slice(0, 10),
     assignedAssets,
     expiringWarranties,
     vendorSummary: Object.entries(vendorSummary).slice(0, 10),
     costSummary,
   };
+}
+
+function formatStatusBreakdown(record: Record<string, number>) {
+  return Object.entries(record)
+    .map(([status, count]) => `${status}=${count}`)
+    .join(", ");
 }
 
 function summarizeLicenses(licenses: SoftwareLicense[]) {
@@ -128,6 +185,9 @@ function buildDatasetSummary(
     `Assets: ${assets.length} total`,
     `By Type: ${Object.entries(assetSummary.typeCounts).map(([type, count]) => `${type}=${count}`).join(", ") || "N/A"}`,
     `By Status: ${Object.entries(assetSummary.statusCounts).map(([status, count]) => `${status}=${count}`).join(", ") || "N/A"}`,
+    `By Category: ${Object.entries(assetSummary.categoryCounts).map(([category, count]) => `${category}=${count}`).join(", ") || "N/A"}`,
+    `Category Status: ${assetSummary.categoryStatusBreakdown.map(({ category, statuses, total }) => `${category} total ${total} (${formatStatusBreakdown(statuses) || "no status data"})`).join("; ") || "N/A"}`,
+    `Type Status: ${assetSummary.typeStatusBreakdown.map(({ type, statuses, total }) => `${type} total ${total} (${formatStatusBreakdown(statuses) || "no status data"})`).join("; ") || "N/A"}`,
     `Top Locations: ${assetSummary.locationCounts.map(([loc, count]) => `${loc} (${count})`).join("; ") || "N/A"}`,
     `Upcoming Warranties: ${assetSummary.expiringWarranties.join("; ") || "None in next 60 days"}`,
     `Vendors: ${assetSummary.vendorSummary.map(([vendor, count]) => `${vendor} (${count})`).join("; ") || "N/A"}`,
@@ -454,7 +514,7 @@ export interface ITAMQueryContext {
 export async function generateAssetRecommendations(
   input: RecommendationInput
 ): Promise<AIRecommendation[]> {
-  if (!input.assets.length || !input.licenses.length) {
+  if (!input.assets.length && !input.licenses.length) {
     return [];
   }
 
@@ -463,9 +523,17 @@ export async function generateAssetRecommendations(
   const instructions = `You are the optimization analyst for AssetVault's ITAM platform.
 Use only the facts inside the provided dataset summary.
 Generate between 3 and 7 actionable optimization recommendations.
-Each recommendation must be a full paragraph written in plain English (no bullet lists, no numbering, no JSON, no brackets).
-Reference concrete counts, locations, dates, or costs from the dataset when possible.
-Conclude each paragraph with a clear next step.`;
+Return ONLY valid JSON in this exact shape:
+{
+  "recommendations": [
+    { "title": "Short Action Phrase", "content": "3-5 sentence explanation.", "type": "<optional type>", "severity": "<optional severity>" }
+  ]
+}
+Rules:
+- Title must be 4-8 words, action-focused, and contain no numbering or prefixes.
+- Content must be a complete paragraph, avoid filler phrases like "Based on the data" or "Next step", never mention datasets/analysis/models/data sources, and never repeat the title verbatim.
+- Use neutral, third-person language (no "our" or "we").
+- Do not add commentary before or after the JSON block.`;
 
   const prompt = `${instructions}
 
@@ -474,16 +542,16 @@ ${profile.summaryText}
 
 Recommendations:`;
 
-  let paragraphs: string[] = [];
+  let structured: LlamaStructuredRecommendation[] = [];
 
   try {
     const llamaResponse = await callLlama(prompt);
-    paragraphs = extractRecommendationParagraphs(llamaResponse);
+    structured = parseStructuredRecommendations(llamaResponse);
   } catch (error) {
     console.error("Error contacting LLaMA for recommendations:", error);
   }
 
-  let recommendations = paragraphsToRecommendations(paragraphs);
+  let recommendations = structuredRecommendationsToAI(structured);
 
   if (recommendations.length < 3) {
     const fallback = buildRuleBasedRecommendations(profile, input);
@@ -506,51 +574,86 @@ const recommendationTypeMatchers: Array<{ type: string; keywords: string[] }> = 
   { type: "Asset Consolidation", keywords: ["consolidate", "standardize", "duplicate", "sprawl", "footprint"] },
 ];
 
+const FILLER_GLOBAL_REGEX = /\b(furthermore|additionally|moreover|lastly|overall|therefore|in conclusion|next steps?|to address this|based on the (provided|available|current) (data|dataset|information)|based on this data)\b[,:]?\s*/gi;
+
 const severityKeywords = {
   high: ["urgent", "critical", "immediately", "severe", "high risk", "outage", "expired"],
   low: ["monitor", "consider", "gradual", "long-term"],
 };
 
-const sanitizeParagraph = (text: string) =>
-  text
+const FILLER_PREFIXES = [
+  /^based on (the )?(provided|available) (dataset|data)[^,]*,?\s*/i,
+  /^based on this (information|data)[^,]*,?\s*/i,
+  /^in addition(,|\s)/i,
+  /^additionally[,:]?\s*/i,
+  /^furthermore[,:]?\s*/i,
+  /^moreover[,:]?\s*/i,
+  /^lastly[,:]?\s*/i,
+  /^overall[,:]?\s*/i,
+  /^another area for improvement (is|involves)\s*/i,
+  /^therefore[,:]?\s*/i,
+  /^to address this(,)?\s*/i,
+  /^to address these issues(,)?\s*/i,
+  /^next steps?[,:]?\s*/i,
+  /^in conclusion[,:]?\s*/i,
+  /^ultimately[,:]?\s*/i,
+];
+
+const PRONOUN_REPLACEMENTS = [
+  { regex: /\bour\b/gi, replacement: "the organization's" },
+  { regex: /\bours\b/gi, replacement: "the organization's" },
+  { regex: /\bwe\b/gi, replacement: "the organization" },
+  { regex: /\bus\b/gi, replacement: "the organization" },
+  { regex: /\bour\s+it/gi, replacement: "the organization's IT" },
+];
+
+const DATASET_PHRASES = [
+  /\bthe dataset suggests\b/gi,
+  /\bbased on the dataset\b/gi,
+  /\bbased on the provided dataset\b/gi,
+  /\bbased on the (available|current) dataset\b/gi,
+  /\bthe data indicates\b/gi,
+  /\baccording to the data\b/gi,
+  /\bthe analysis shows\b/gi,
+  /\bthe model suggests\b/gi,
+  /\bbased on the information provided\b/gi,
+  /\boverall dataset summary\b/gi,
+  /\bprovided dataset summary\b/gi,
+  /\bbased on the information\b/gi,
+  /\bbased on the analysis\b/gi,
+  /\baccording to the analysis\b/gi,
+  /\baccording to the dataset\b/gi,
+];
+
+const stripDatasetLanguage = (text: string) => {
+  let cleaned = text;
+  for (const pattern of DATASET_PHRASES) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+  cleaned = cleaned.replace(/\b(dataset|analysis|model|data)\b/gi, "");
+  return cleaned;
+};
+
+const sanitizeParagraph = (text: string) => {
+  let cleaned = text
     .replace(/^[-*\d\.\)]\s*/g, "")
     .replace(/[{}\[\]]/g, "")
     .trim();
 
-const extractRecommendationParagraphs = (payload: string): string[] => {
-  if (!payload) return [];
-  const normalized = payload.replace(/\r/g, "\n").trim();
-  if (!normalized) return [];
-
-  const rawBlocks = normalized.split(/\n{2,}/).filter(Boolean);
-  const paragraphs: string[] = [];
-
-  for (const block of rawBlocks) {
-    const subBlocks = block.split(/\n(?=\d+[\).\-])/);
-    if (subBlocks.length > 1) {
-      subBlocks.forEach((entry) => paragraphs.push(entry));
-    } else {
-      paragraphs.push(block);
-    }
+  for (const pattern of FILLER_PREFIXES) {
+    cleaned = cleaned.replace(pattern, "");
   }
 
-  return paragraphs
-    .map((paragraph) => sanitizeParagraph(paragraph))
-    .map((paragraph) => paragraph.replace(/^(recommendation\s*\d+[:.-]?)/i, "").trim())
-    .filter((paragraph) => paragraph.length > 40)
-    .slice(0, 7);
-};
+  cleaned = cleaned.replace(/\bthis (analysis|data set|dataset|information)\b/gi, "the analysis");
+  cleaned = cleaned.replace(FILLER_GLOBAL_REGEX, "");
 
-const buildTitleFromParagraph = (paragraph: string, fallback: string): string => {
-  const cleaned = paragraph.replace(/\s+/g, " ").trim();
-  if (!cleaned) return fallback;
-  const firstSentenceMatch = cleaned.match(/[^.!?]+[.!?]?/);
-  const sentence = (firstSentenceMatch ? firstSentenceMatch[0] : cleaned).replace(/[.!?]+$/, "");
-  const words = sentence.split(" ");
-  if (words.length <= 12) {
-    return sentence.trim();
+  for (const { regex, replacement } of PRONOUN_REPLACEMENTS) {
+    cleaned = cleaned.replace(regex, replacement);
   }
-  return `${words.slice(0, 12).join(" ")}...`;
+
+  cleaned = stripDatasetLanguage(cleaned);
+
+  return cleaned.replace(/\s{2,}/g, " ").trim();
 };
 
 const inferRecommendationType = (paragraph: string): string => {
@@ -574,17 +677,118 @@ const inferSeverity = (paragraph: string): "low" | "medium" | "high" => {
   return "medium";
 };
 
-const paragraphsToRecommendations = (paragraphs: string[]): AIRecommendation[] =>
-  paragraphs.map((paragraph, index) => {
-    const type = inferRecommendationType(paragraph);
-    const severity = inferSeverity(paragraph);
+const MAX_TITLE_WORDS = 8;
+
+const sanitizeModelTitle = (title?: string, fallback?: string) => {
+  if (!title) return fallback || "AI Insight";
+  let cleaned = title
+    .replace(/```/g, "")
+    .replace(/^(recommendation|optimization|insight)\s*\d+[:.\-]?\s*/i, "")
+    .replace(/^\d+[:.\-]?\s*/i, "")
+    .trim();
+  cleaned = stripDatasetLanguage(cleaned);
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  cleaned = words.slice(0, MAX_TITLE_WORDS).join(" ");
+  if (!cleaned) return fallback || "AI Insight";
+  return cleaned
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+interface LlamaStructuredRecommendation {
+  title?: string;
+  content?: string;
+  severity?: string;
+  type?: string;
+}
+
+const JSON_BLOCK_REGEX = /```json([\s\S]*?)```/i;
+
+const parseStructuredRecommendations = (payload: string): LlamaStructuredRecommendation[] => {
+  if (!payload?.trim()) return [];
+  let raw = payload.trim();
+  const match = raw.match(JSON_BLOCK_REGEX);
+  if (match) {
+    raw = match[1].trim();
+  }
+
+  const attemptParse = (input: string) => {
+    try {
+      return JSON.parse(input);
+    } catch {
+      const start = input.indexOf("{");
+      const end = input.lastIndexOf("}");
+      if (start !== -1 && end !== -1 && end > start) {
+        const sliced = input.slice(start, end + 1);
+        try {
+          return JSON.parse(sliced);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+  };
+
+  let data = attemptParse(raw);
+  if (!data && match) {
+    data = attemptParse(match[1].trim());
+  }
+
+  if (!data) {
+    return [];
+  }
+
+  const records = Array.isArray(data)
+    ? data
+    : Array.isArray((data as any)?.recommendations)
+      ? (data as any).recommendations
+      : [];
+
+  if (!Array.isArray(records)) {
+    return [];
+  }
+
+  return records
+    .filter((record) => record && typeof record === "object")
+    .map((record: any) => ({
+      title: typeof record.title === "string" ? record.title : undefined,
+      content: typeof record.content === "string" ? record.content : undefined,
+      severity: typeof record.severity === "string" ? record.severity : undefined,
+      type: typeof record.type === "string" ? record.type : undefined,
+    }))
+    .filter((record) => record.title && record.content);
+};
+
+const mapModelType = (value?: string) => {
+  if (!value) return "";
+  const normalized = value.toLowerCase();
+  for (const matcher of recommendationTypeMatchers) {
+    if (normalized.includes(matcher.type.toLowerCase())) {
+      return matcher.type;
+    }
+  }
+  return "";
+};
+
+const structuredRecommendationsToAI = (records: LlamaStructuredRecommendation[]): AIRecommendation[] =>
+  records.map((record, index) => {
+    const cleanTitle = sanitizeModelTitle(record.title, `AI Insight ${index + 1}`);
+    const sanitizedContent = sanitizeParagraph(record.content || "");
+    const severity = (record.severity || "").toLowerCase() as "low" | "medium" | "high";
+    const type = mapModelType(record.type) || inferRecommendationType(sanitizedContent);
+    const resolvedSeverity = ["low", "medium", "high"].includes(severity)
+      ? severity
+      : inferSeverity(sanitizedContent);
+
     return {
       type,
-      title: buildTitleFromParagraph(paragraph, `AI Insight ${index + 1}`),
-      description: paragraph,
+      title: cleanTitle,
+      description: sanitizedContent,
       potentialSavings: 0,
-      priority: severity,
-      severity,
+      priority: resolvedSeverity,
+      severity: resolvedSeverity,
       assetIds: [],
     };
   });
@@ -619,6 +823,34 @@ const buildRuleBasedRecommendations = (
       severity: rec.severity || rec.priority || "medium",
     });
   };
+
+  const totalRecords = input.assets.length + input.licenses.length;
+  if (totalRecords < 3) {
+    pushRec({
+      type: "General Optimization",
+      title: "Add Foundational Data",
+      description: "The ITAM environment has too few hardware or software entries for deeper analytics. Capture additional assets, licenses, and assignments to unlock richer AI insights.",
+      severity: "medium",
+    });
+  }
+
+  if (!input.assets.length) {
+    pushRec({
+      type: "Asset Utilization",
+      title: "Add Hardware Inventory",
+      description: "No hardware inventory has been recorded yet. Import laptops, desktops, and infrastructure assets so lifecycle tracking and warranty monitoring can begin.",
+      severity: "medium",
+    });
+  }
+
+  if (!input.licenses.length) {
+    pushRec({
+      type: "License Optimization",
+      title: "Document Software Licenses",
+      description: "Software licenses are missing from the system. Register core applications and license counts to enable optimization and renewal reminders.",
+      severity: "medium",
+    });
+  }
 
   if (stats.expiringWarranties.length) {
     const soonAssets = stats.expiringWarranties
@@ -833,6 +1065,9 @@ You can answer:
       `Total assets: ${context.totalAssets}`,
       `Asset types: ${Object.entries(assetSummary.typeCounts).map(([type, count]) => `${type}=${count}`).join(", ") || "N/A"}`,
       `Asset status: ${Object.entries(assetSummary.statusCounts).map(([status, count]) => `${status}=${count}`).join(", ") || "N/A"}`,
+      `Asset categories: ${Object.entries(assetSummary.categoryCounts).map(([category, count]) => `${category}=${count}`).join(", ") || "N/A"}`,
+      `Category details: ${assetSummary.categoryStatusBreakdown.map(({ category, total, statuses }) => `${category}: total ${total} (${formatStatusBreakdown(statuses) || "no status data"})`).join("; ") || "N/A"}`,
+      `Type & status details: ${assetSummary.typeStatusBreakdown.map(({ type, total, statuses }) => `${type}: total ${total} (${formatStatusBreakdown(statuses) || "no status data"})`).join("; ") || "N/A"}`,
       `Locations: ${assetSummary.locationCounts.map(([loc, count]) => `${loc} (${count})`).join("; ") || "N/A"}`,
       `Upcoming warranties (<=60 days): ${assetSummary.expiringWarranties.join("; ") || "None"}`,
       `Vendors & contracts: ${assetSummary.vendorSummary.map(([vendor, count]) => `${vendor} (${count})`).join("; ") || "N/A"}`,

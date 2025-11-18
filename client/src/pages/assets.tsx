@@ -2093,7 +2093,7 @@ export default function Assets() {
                   <DeviceSoftware
                     assetId={viewingAsset.id}
                     tenantId={(viewingAsset as any).tenantId}
-                    canAssignSoftware={permissions.isAdmin || permissions.isSuperAdmin}
+                    canAssignSoftware={permissions.isAdmin || permissions.isSuperAdmin || permissions.isItManager}
                   />
                 ) : (
                   <div className="text-sm text-muted-foreground">No asset selected.</div>

@@ -143,117 +143,142 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
           </Button>
         </DialogTrigger>
         
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-500" />
-              ITAM AI Assistant
-            </DialogTitle>
-            <DialogDescription>
-              Ask questions about your IT assets, software licenses, or get optimization recommendations for your ITAM portal.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
-              Ask me anything about your IT Asset Management portal. I can help with assets, licenses, reports, recommendations, and more.
+        <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
+          <div className="flex flex-col h-[70vh]">
+            <div className="border-b border-border/60 px-6 py-4 bg-background/95">
+              <DialogHeader className="space-y-2">
+                <DialogTitle className="flex items-center gap-3 text-xl">
+                  <div className="p-2 rounded-full bg-gradient-to-r from-blue-500/80 to-purple-600/80">
+                    <Sparkles className="h-5 w-5 text-white" />
+                  </div>
+                  ITAM AI Assistant
+                </DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground">
+                  Ask questions about assets, licenses, users, tickets, or recommendations. Answers always reference live ITAM data.
+                </DialogDescription>
+              </DialogHeader>
             </div>
-            
-            <div className="space-y-3">
-              <Textarea
-                placeholder="Ask about assets, licenses, users, reports, or any ITAM-related question..."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="min-h-[100px] resize-none"
-                disabled={isLoading}
-                data-testid="textarea-ai-prompt"
-              />
-              
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-muted-foreground">
-                  {prompt.length > 0 && (
-                    <span className={prompt.length > 2000 ? "text-destructive" : ""}>
-                      {prompt.length}/2000 chars • 
-                    </span>
-                  )}
-                  Press Enter to send, Shift+Enter for new line
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsOpen(false);
-                      setPrompt("");
-                    }}
-                    disabled={isLoading}
-                    data-testid="button-ai-cancel"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isLoading || !prompt.trim() || prompt.length > 2000}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                    data-testid="button-ai-submit"
-                  >
-                    {isLoading ? (
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Thinking...
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Send className="h-4 w-4" />
-                        Ask AI
-                      </div>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-            
-            {(answer || summary || errorMessage || isLoading) && (
-              <div className="space-y-2">
-                <div className="text-xs font-medium text-muted-foreground">Assistant Response</div>
-                <div className="rounded-lg border border-border bg-muted/30 p-3 min-h-[90px]">
-                  {isLoading && !answer && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      Thinking with your ITAM data...
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 bg-muted/10">
+              {!answer && !summary && !errorMessage && !isLoading ? (
+                <div className="flex flex-col items-center text-center space-y-4 mt-6">
+                  <div className="p-4 rounded-2xl bg-background border border-border/60 shadow-inner">
+                    <div className="flex items-center gap-3 text-lg font-semibold">
+                      <Sparkles className="h-5 w-5 text-blue-500" />
+                      AssetVault Assistant
                     </div>
-                  )}
-                  {summary && (
-                    <p className="text-sm font-semibold text-foreground mb-1">
-                      {summary}
+                    <p className="text-sm text-muted-foreground mt-2">
+                      I can summarize asset counts, highlight expiring warranties, or analyze deployment trends. Ask away!
                     </p>
-                  )}
-                  {answer && (
-                    <p className="text-sm text-foreground whitespace-pre-line">
-                      {answer}
-                    </p>
-                  )}
-                  {errorMessage && (
-                    <p className="text-sm text-destructive">
-                      {errorMessage}
-                    </p>
-                  )}
-                  {!answer && !errorMessage && !isLoading && (
-                    <p className="text-sm text-muted-foreground">
-                      Ask a question to see AI-powered insights here.
-                    </p>
-                  )}
+                  </div>
+                  <div className="w-full space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground/80">Try asking:</p>
+                    <div className="grid gap-2 text-sm text-muted-foreground">
+                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                        “How many laptops are currently deployed?”
+                      </div>
+                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                        “Which software licenses expire next quarter?”
+                      </div>
+                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                        “Show me assets in Bangalore with warranties ending soon.”
+                      </div>
+                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                        “Summarize open tickets by priority.”
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-muted-foreground">Example questions:</div>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <div>• "How many laptops are currently deployed?"</div>
-                <div>• "Which software licenses are expiring soon?"</div>
-                <div>• "Generate a report of all assets in Building A"</div>
-                <div>• "What are the current IT recommendations?"</div>
+              ) : (
+                <div className="flex justify-center">
+                  <div className="w-full max-w-2xl">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Assistant Response</div>
+                    <div className="rounded-2xl border border-border bg-background/95 shadow-lg p-4 space-y-2">
+                      {isLoading && !answer && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          Thinking with your ITAM data...
+                        </div>
+                      )}
+                      {summary && (
+                        <p className="text-base font-semibold text-foreground">
+                          {summary}
+                        </p>
+                      )}
+                      {answer && (
+                        <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
+                          {answer}
+                        </p>
+                      )}
+                      {errorMessage && (
+                        <p className="text-sm text-destructive">
+                          {errorMessage}
+                        </p>
+                      )}
+                      {!answer && !errorMessage && !isLoading && (
+                        <p className="text-sm text-muted-foreground">
+                          Ask a question to see AI-powered insights here.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border/60 bg-background px-6 py-4">
+              <div className="space-y-3">
+                <Textarea
+                  placeholder="Ask about assets, licenses, users, reports, or any ITAM-related question..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="min-h-[90px] resize-none"
+                  disabled={isLoading}
+                  data-testid="textarea-ai-prompt"
+                />
+                
+                <div className="flex flex-wrap gap-3 items-center justify-between text-xs text-muted-foreground">
+                  <div>
+                    {prompt.length > 0 && (
+                      <span className={prompt.length > 2000 ? "text-destructive" : ""}>
+                        {prompt.length}/2000 chars •{" "}
+                      </span>
+                    )}
+                    Press Enter to send, Shift+Enter for new line
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsOpen(false);
+                        setPrompt("");
+                      }}
+                      disabled={isLoading}
+                      data-testid="button-ai-cancel"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isLoading || !prompt.trim() || prompt.length > 2000}
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                      data-testid="button-ai-submit"
+                    >
+                      {isLoading ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Thinking...
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Send className="h-4 w-4" />
+                          Ask AI
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

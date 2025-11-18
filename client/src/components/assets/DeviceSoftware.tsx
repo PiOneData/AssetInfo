@@ -4,9 +4,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { authenticatedRequest } from "@/lib/auth";
+import { Trash2 } from "lucide-react";
 
 type Props = {
   assetId: string;   // our ITAM asset id for the device
@@ -56,6 +67,8 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [selectedSoftwareId, setSelectedSoftwareId] = useState<string>("");
+  const [isUnassignDialogOpen, setIsUnassignDialogOpen] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<ManualSoftwareItem | null>(null);
 
 
   // Fetch software list for this device (our server -> OA)
@@ -198,12 +211,47 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
         description: "The selected software asset has been linked to this device.",
       });
       setIsAssignDialogOpen(false);
+      const softwareId = selectedSoftwareId;
       setSelectedSoftwareId("");
       qc.invalidateQueries({ queryKey: ["deviceSoftware", assetId] });
+      if (softwareId) {
+        qc.invalidateQueries({ queryKey: [`/api/software/${softwareId}/devices`] });
+      }
     },
     onError: (error: any) => {
       toast({
         title: "Failed to assign software",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unassignSoftwareMutation = useMutation({
+    mutationFn: async (softwareAssetId: string) => {
+      const response = await authenticatedRequest("DELETE", `/api/assets/${assetId}/software-links/${softwareAssetId}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.message || "Failed to unassign software");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Software unassigned",
+        description: "The software link was removed from this device.",
+      });
+      qc.invalidateQueries({ queryKey: ["deviceSoftware", assetId] });
+      const removalSoftwareId = pendingRemoval?.softwareAssetId;
+      if (removalSoftwareId) {
+        qc.invalidateQueries({ queryKey: [`/api/software/${removalSoftwareId}/devices`] });
+      }
+      setIsUnassignDialogOpen(false);
+      setPendingRemoval(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to unassign software",
         description: error?.message || "Please try again.",
         variant: "destructive",
       });
@@ -220,6 +268,10 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
       return;
     }
     assignSoftwareMutation.mutate(selectedSoftwareId);
+  };
+  const handleUnassignClick = (item: ManualSoftwareItem) => {
+    setPendingRemoval(item);
+    setIsUnassignDialogOpen(true);
   };
 
   const toggle = (key: string) =>
@@ -357,6 +409,7 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
                 <th className="text-left p-2">Version</th>
                 <th className="text-left p-2">Publisher</th>
                 <th className="text-left p-2">Assigned</th>
+                {canAssignSoftware && <th className="text-right p-2 w-28">Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -368,6 +421,19 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
                   <td className="p-2 text-muted-foreground">
                     {item.assignedAt ? new Date(item.assignedAt).toLocaleString() : "-"}
                   </td>
+                  {canAssignSoftware && (
+                    <td className="p-2 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => handleUnassignClick(item)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Unassign</span>
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -450,6 +516,38 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={isUnassignDialogOpen}
+        onOpenChange={(open) => {
+          setIsUnassignDialogOpen(open);
+          if (!open) {
+            setPendingRemoval(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this software?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unlink {pendingRemoval?.name || "the selected software"} from this device. The asset record will remain available.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unassignSoftwareMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={unassignSoftwareMutation.isPending || !pendingRemoval}
+              onClick={() => {
+                if (pendingRemoval) {
+                  unassignSoftwareMutation.mutate(pendingRemoval.softwareAssetId);
+                }
+              }}
+            >
+              {unassignSoftwareMutation.isPending ? "Removing..." : "Unassign"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

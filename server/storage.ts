@@ -124,7 +124,8 @@ export interface IStorage {
     createdAt: Date | null;
   }>>;
   createAssetSoftwareLink(link: InsertAssetSoftwareLink): Promise<AssetSoftwareLink>;
-  getSoftwareLinkedDevices(softwareAssetId: string, tenantId: string): Promise<Asset[]>;
+  getSoftwareLinkedDevices(softwareAssetId: string, tenantId: string): Promise<Array<Asset & { linkedAt?: Date | null }>>;
+  deleteAssetSoftwareLink(id: string, tenantId: string): Promise<boolean>;
 
   // Software Licenses
   getAllSoftwareLicenses(tenantId: string): Promise<SoftwareLicense[]>;
@@ -805,22 +806,44 @@ export class DatabaseStorage implements IStorage {
     return newLink;
   }
 
-  async getSoftwareLinkedDevices(softwareAssetId: string, tenantId: string): Promise<Asset[]> {
-    const linkedAssets = await db
-      .select({ deviceId: assetSoftwareLinks.assetId })
+  async getSoftwareLinkedDevices(softwareAssetId: string, tenantId: string): Promise<Array<Asset & { linkedAt?: Date | null }>> {
+    const hardwareAssets = alias(assets, "hardware_assets");
+
+    const rows = await db
+      .select({
+        device: hardwareAssets,
+        linkedAt: assetSoftwareLinks.createdAt,
+      })
       .from(assetSoftwareLinks)
+      .innerJoin(
+        hardwareAssets,
+        and(
+          eq(assetSoftwareLinks.assetId, hardwareAssets.id),
+          eq(hardwareAssets.tenantId, tenantId),
+          ilike(hardwareAssets.type, "hardware")
+        )
+      )
       .where(and(eq(assetSoftwareLinks.softwareAssetId, softwareAssetId), eq(assetSoftwareLinks.tenantId, tenantId)));
 
-    if (!linkedAssets.length) {
-      return [];
-    }
+    return rows.map((row) => ({
+      ...row.device,
+      linkedAt: row.linkedAt ?? null,
+    }));
+  }
 
-    const deviceIds = linkedAssets.map((link) => link.deviceId);
+  async deleteAssetSoftwareLink(assetId: string, softwareAssetId: string, tenantId: string): Promise<boolean> {
+    const deleted = await db
+      .delete(assetSoftwareLinks)
+      .where(
+        and(
+          eq(assetSoftwareLinks.assetId, assetId),
+          eq(assetSoftwareLinks.softwareAssetId, softwareAssetId),
+          eq(assetSoftwareLinks.tenantId, tenantId)
+        )
+      )
+      .returning({ id: assetSoftwareLinks.id });
 
-    return await db
-      .select()
-      .from(assets)
-      .where(and(eq(assets.tenantId, tenantId), eq(assets.type, "Hardware"), inArray(assets.id, deviceIds)));
+    return deleted.length > 0;
   }
 
   // Software Licenses

@@ -1966,6 +1966,32 @@ TENANT_NAME=${tenant.name}
     }
   });
 
+  app.delete("/api/assets/:assetId/software-links/:softwareAssetId", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const { assetId, softwareAssetId } = req.params;
+
+      if (!softwareAssetId) {
+        return res.status(400).json({ message: "softwareAssetId is required" });
+      }
+
+      const device = await storage.getAsset(assetId, tenantId);
+      if (!device) {
+        return res.status(404).json({ message: "Device not found" });
+      }
+
+      const removed = await storage.deleteAssetSoftwareLink(assetId, softwareAssetId, tenantId);
+      if (!removed) {
+        return res.status(404).json({ message: "Software assignment not found" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to unassign software:", error);
+      res.status(500).json({ message: "Failed to unassign software from device" });
+    }
+  });
+
   /**
    * POST add selected software into inventory (as assets with type=Software).
    * - Manually checks for existing software and updates/inserts accordingly
@@ -2007,8 +2033,10 @@ TENANT_NAME=${tenant.name}
           )
           .limit(1);
 
+        let softwareAssetId: string | null = null;
+
         if (existing.length > 0) {
-          // Update existing software
+          softwareAssetId = existing[0].id;
           await db
             .update(s.assets)
             .set({
@@ -2021,8 +2049,7 @@ TENANT_NAME=${tenant.name}
             })
             .where(eq(s.assets.id, existing[0].id));
         } else {
-          // Insert new software
-          await db
+          const inserted = await db
             .insert(s.assets)
             .values({
             tenantId,
@@ -2062,7 +2089,25 @@ TENANT_NAME=${tenant.name}
             companyGstNumber: null,
             createdAt: now,
             updatedAt: now,
-          });
+          })
+            .returning({ id: s.assets.id });
+
+          softwareAssetId = inserted?.[0]?.id ?? null;
+        }
+
+        if (softwareAssetId && deviceAssetId) {
+          try {
+            await storage.createAssetSoftwareLink({
+              tenantId,
+              assetId: deviceAssetId,
+              softwareAssetId,
+              createdBy: req.user?.userId ?? null,
+            });
+          } catch (linkError: any) {
+            if (linkError?.code !== "23505") {
+              console.error("Failed to create enrollment software link:", linkError);
+            }
+          }
         }
 
         created += 1;
@@ -2146,75 +2191,11 @@ TENANT_NAME=${tenant.name}
 
       console.log(`[SOFTWARE DEVICES] Found ${allDevices.length} hardware devices to check`);
 
-      const manualDevices = await storage.getSoftwareLinkedDevices(softwareId, user.tenantId);
+      const linkedDevices = await storage.getSoftwareLinkedDevices(softwareId, user.tenantId);
 
-      // For each device, check if it has this software installed
-      const devicesWithSoftware = [];
-      
-      for (const device of allDevices) {
-        try {
-          // Try to get OpenAudit device ID from specifications
-          // Check multiple possible locations where oaId might be stored
-          const specs = device.specifications as any;
-          const oaId = 
-            specs?.openaudit?.id ||
-            specs?.agent?.oaId || 
-            specs?.oaId;
-          
-          if (oaId) {
-            // Fetch software list from OpenAudit using shared credentials
-            const deviceSoftware = await oaFetchDeviceSoftware(oaId);
-            
-            console.log(`[SOFTWARE DEVICES] Device "${device.name}" (${oaId}): ${deviceSoftware.length} software items`);
-            
-            // Check if this software is installed on the device
-            const hasSoftware = deviceSoftware.some((sw: any) => {
-              const swName = sw.name || sw.software_name || "";
-              const swVersion = sw.version || "";
-              
-              // More flexible matching:
-              // 1. Check if base names match (case-insensitive)
-              const baseSwName = swName.replace(/\s+[\d.]+$/g, '').trim();
-              const nameMatch = 
-                swName.toLowerCase().includes(baseSoftwareName.toLowerCase()) ||
-                baseSoftwareName.toLowerCase().includes(swName.toLowerCase()) ||
-                baseSwName.toLowerCase() === baseSoftwareName.toLowerCase();
-              
-              if (nameMatch) {
-                console.log(`[SOFTWARE DEVICES]   - Match found: "${swName}" (version: ${swVersion})`);
-              }
-              
-              return nameMatch;
-            });
-            
-            if (hasSoftware) {
-              devicesWithSoftware.push(device);
-              console.log(`[SOFTWARE DEVICES] ✓ Device "${device.name}" has the software`);
-            }
-          } else {
-            console.log(`[SOFTWARE DEVICES] Device "${device.name}": No OpenAudit ID found`);
-          }
-        } catch (err) {
-          // Skip devices that fail to fetch software
-          console.error(`[SOFTWARE DEVICES] Failed to fetch software for device ${device.id}:`, err);
-        }
-      }
+      console.log(`[SOFTWARE DEVICES] Total linked devices: ${linkedDevices.length}`);
 
-      const deviceMap = new Map<string, Asset>();
-      for (const device of manualDevices) {
-        deviceMap.set(device.id, device);
-      }
-      for (const device of devicesWithSoftware) {
-        if (!deviceMap.has(device.id)) {
-          deviceMap.set(device.id, device);
-        }
-      }
-
-      const mergedDevices = Array.from(deviceMap.values());
-
-      console.log(`[SOFTWARE DEVICES] Total devices with software: ${mergedDevices.length}`);
-
-      return res.json({ devices: mergedDevices, softwareName });
+      return res.json({ devices: linkedDevices, softwareName });
     } catch (e: any) {
       console.error("[/api/software/:id/devices] failed:", e?.message ?? e);
       return res.status(500).json({ error: "Failed to fetch devices", details: e?.message ?? String(e) });
@@ -4219,9 +4200,28 @@ const allowedRecommendationTypes = new Map<string, string>([
     }
   };
 
+  const cleanRecommendationTitleText = (title?: string | null, fallback?: string) => {
+    if (!title && fallback) return fallback;
+    if (!title) return fallback || "AI Insight";
+    let cleaned = title
+      .replace(/^(optimization|recommendation|insight)\s*recommendation\s*\d*[:\-]?\s*/i, "")
+      .replace(/^(optimization|recommendation|insight)\s*\d*[:\-]?\s*/i, "")
+      .replace(/^\d+[:\.\-]\s*/i, "")
+      .trim();
+    const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 8);
+    if (words.length >= 4) {
+      cleaned = words.join(" ");
+    }
+    if (!cleaned) {
+      return fallback || "AI Insight";
+    }
+    return cleaned;
+  };
+
   const mapRecommendationResponse = (rec: s.Recommendation) => ({
     ...rec,
     type: normalizeRecommendationType(rec.type),
+    title: cleanRecommendationTitleText(rec.title, rec.title || undefined),
     description: rec.description?.trim() || "No description available for this recommendation.",
     severity: rec.priority || "medium",
   });
@@ -4234,8 +4234,12 @@ const allowedRecommendationTypes = new Map<string, string>([
       storage.getTenantUsers(tenantId),
     ]);
 
-    if (!assetsForTenant.length || !licensesForTenant.length) {
-      return { status: "no-data", message: "Not enough ITAM data to generate recommendations.", recommendations: [] };
+    if (!assetsForTenant.length && !licensesForTenant.length) {
+      return {
+        status: "no-data",
+        message: "Your inventory is empty. Add hardware or software to generate insights.",
+        recommendations: [],
+      };
     }
 
     const utilizationResults = await Promise.all(
@@ -4252,13 +4256,17 @@ const allowedRecommendationTypes = new Map<string, string>([
     });
 
     if (!aiRecommendations.length) {
-      return { status: "no-data", message: "Not enough ITAM data to generate recommendations.", recommendations: [] };
+      return {
+        status: "no-data",
+        message: "Not enough ITAM data to generate recommendations.",
+        recommendations: [],
+      };
     }
 
     const normalized = aiRecommendations
       .map((rec, index) => ({
         type: normalizeRecommendationType(rec.type),
-        title: rec.title?.trim() || `AI Insight ${index + 1}`,
+        title: cleanRecommendationTitleText(rec.title?.trim(), `AI Insight ${index + 1}`),
         description: rec.description?.trim() || "No description available for this recommendation.",
         potentialSavings: Number(rec.potentialSavings || 0).toFixed(2),
         priority: normalizeSeverity(rec.priority || rec.severity),
@@ -4267,7 +4275,11 @@ const allowedRecommendationTypes = new Map<string, string>([
       .filter((rec) => rec.title && rec.description);
 
     if (!normalized.length) {
-      return { status: "no-data", message: "Not enough ITAM data to generate recommendations.", recommendations: [] };
+      return {
+        status: "no-data",
+        message: "Not enough ITAM data to generate recommendations.",
+        recommendations: [],
+      };
     }
 
     await storage.deleteRecommendationsByTenant(tenantId);
