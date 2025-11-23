@@ -27,6 +27,8 @@ import {
   type JWTPayload 
 } from "./services/auth";
 import { generateAssetRecommendations, processITAMQuery, type ITAMQueryContext } from "./services/openai";
+import { getComplianceOverview } from "./compliance/overview";
+import { getComplianceScoreDetails } from "./compliance/scoreDetails";
 import { generateTempPassword } from "./utils/password-generator";
 import { sendEmail, generateSecurePassword, createWelcomeEmailTemplate } from "./services/email";
 import { processEmailToTicket, validateEmailData, validateWebhookAuth } from "./services/email-to-ticket";
@@ -2702,6 +2704,28 @@ TENANT_NAME=${tenant.name}
       res.status(500).json({ message: "Failed to fetch dashboard metrics" });
     }
   });
+
+  app.get("/api/compliance/overview", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const overview = await getComplianceOverview(req.user!.tenantId);
+      res.json(overview);
+    } catch (error) {
+      console.error("Compliance overview error:", error);
+      res.status(500).json({ message: "Failed to fetch compliance overview" });
+    }
+  });
+
+  const handleComplianceScoreDetails: RequestHandler = async (req, res) => {
+    try {
+      const details = await getComplianceScoreDetails(req.user!.tenantId);
+      res.json(details);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch compliance score details" });
+    }
+  };
+
+  app.get("/api/compliance/score-details", authenticateToken, handleComplianceScoreDetails);
+  app.get("/api/compliance/score", authenticateToken, handleComplianceScoreDetails);
 
   // Global Search API
   app.get("/api/search", authenticateToken, async (req: Request, res: Response) => {

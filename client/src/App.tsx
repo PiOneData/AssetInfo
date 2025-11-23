@@ -22,6 +22,9 @@ import Tickets from "@/pages/tickets";
 import ActivityLogs from "@/pages/activity-logs";
 import Reports from "@/pages/reports";
 import SearchResults from "@/pages/search-results";
+import ComplianceOverviewPage from "@/pages/compliance";
+import ComplianceLicensePage from "@/pages/compliance-license";
+import ComplianceScoreDetails from "@/pages/compliance/ComplianceScoreDetails";
 
 function Router() {
   return (
@@ -100,6 +103,21 @@ function Router() {
       <Route path="/reports">
         <ProtectedRoute requiredRole="technician">
           <Reports />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/dashboard/compliance">
+        <ProtectedRoute requiredRole="technician">
+          <ComplianceOverviewPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/dashboard/compliance/score">
+        <ProtectedRoute requiredRole="technician">
+          <ComplianceScoreDetails />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/dashboard/compliance/license">
+        <ProtectedRoute requiredRole="technician">
+          <ComplianceLicensePage />
         </ProtectedRoute>
       </Route>
       <Route path="/search-results">

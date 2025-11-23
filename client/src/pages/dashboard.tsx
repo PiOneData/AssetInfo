@@ -31,6 +31,7 @@ import { UnusedLicensesTile } from "@/components/dashboard/individual-tiles/unus
 import { ExpiringItemsTile } from "@/components/dashboard/individual-tiles/expiring-items-tile";
 import { ComplianceRiskTile } from "@/components/dashboard/individual-tiles/compliance-risk-tile";
 import { RecentActivitiesTile } from "@/components/dashboard/individual-tiles/recent-activities-tile";
+import { DashboardComplianceSection } from "@/components/dashboard/compliance-overview";
 import { Button } from "@/components/ui/button";
 import { authenticatedRequest } from "@/lib/auth";
 import type { Recommendation } from "@shared/schema";
@@ -655,6 +656,8 @@ export default function Dashboard() {
                 </DraggableTileWrapper>
               </div>
             </div>
+
+            <DashboardComplianceSection />
 
             {/* Expiring Warranties & Licenses Section */}
             <div className="mb-8" data-testid="section-expiring-items">
