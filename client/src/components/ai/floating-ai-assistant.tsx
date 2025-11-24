@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,13 +25,21 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
-  const [answer, setAnswer] = useState<string>("");
-  const [summary, setSummary] = useState<string>("");
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const lastMessageRef = useRef<HTMLDivElement | null>(null);
 
   if (!user) {
     return null;
   }
+
+  const userDisplayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "You";
+
+  useEffect(() => {
+    if (lastMessageRef.current) {
+      lastMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [messages]);
 
   const handleSubmit = async () => {
     if (!prompt.trim()) {
@@ -54,12 +62,13 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
 
     setIsLoading(true);
     setErrorMessage("");
-    setAnswer("");
-    setSummary("");
+    const trimmedPrompt = prompt.trim();
+    setMessages((prev) => [...prev, { role: "user", content: trimmedPrompt }]);
+    setPrompt("");
 
     try {
       const response = await authenticatedRequest("POST", "/api/ai/query", {
-        prompt: prompt.trim()
+        prompt: trimmedPrompt
       });
 
       if (!response.ok) {
@@ -68,9 +77,10 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
       }
 
       const data = await response.json();
-      setAnswer((data.answer || "").trim());
-      setSummary((data.summary || "").trim());
-      setPrompt("");
+      const assistantReply = (data.answer || data.summary || "").trim();
+      if (assistantReply) {
+        setMessages((prev) => [...prev, { role: "assistant", content: assistantReply }]);
+      }
 
     } catch (error: any) {
       console.error('AI query error:', error);
@@ -127,8 +137,7 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
           setIsOpen(open);
           if (!open) {
             setPrompt("");
-            setAnswer("");
-            setSummary("");
+            setMessages([]);
             setErrorMessage("");
           }
         }}
@@ -160,7 +169,7 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 bg-muted/10">
-              {!answer && !summary && !errorMessage && !isLoading ? (
+              {!messages.length && !errorMessage && !isLoading ? (
                 <div className="flex flex-col items-center text-center space-y-4 mt-6">
                   <div className="p-4 rounded-2xl bg-background border border-border/60 shadow-inner">
                     <div className="flex items-center gap-3 text-lg font-semibold">
@@ -192,32 +201,33 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
               ) : (
                 <div className="flex justify-center">
                   <div className="w-full max-w-2xl">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">Assistant Response</div>
-                    <div className="rounded-2xl border border-border bg-background/95 shadow-lg p-4 space-y-2">
-                      {isLoading && !answer && (
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Conversation</div>
+                    <div className="rounded-2xl border border-border bg-background/95 shadow-lg p-4 space-y-3">
+                      {messages.map((message, index) => (
+                        <div
+                          key={`${message.role}-${index}`}
+                          ref={index === messages.length - 1 ? lastMessageRef : undefined}
+                          className={`p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-line border ${
+                            message.role === "user"
+                              ? "bg-muted/25 border-border/70 border-l-4 border-l-primary/50"
+                              : "bg-background/90 border-primary/40 shadow-[0_0_16px_rgba(99,102,241,0.2)] border-l-4 border-l-blue-500/60"
+                          }`}
+                        >
+                          <p className={`text-xs font-semibold tracking-wide mb-1 ${message.role === "user" ? "text-muted-foreground" : "text-blue-200"}`}>
+                            {message.role === "user" ? userDisplayName : "ITAM Assistant"}
+                          </p>
+                          {message.content}
+                        </div>
+                      ))}
+                      {isLoading && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                           Thinking with your ITAM data...
                         </div>
                       )}
-                      {summary && (
-                        <p className="text-base font-semibold text-foreground">
-                          {summary}
-                        </p>
-                      )}
-                      {answer && (
-                        <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
-                          {answer}
-                        </p>
-                      )}
                       {errorMessage && (
                         <p className="text-sm text-destructive">
                           {errorMessage}
-                        </p>
-                      )}
-                      {!answer && !errorMessage && !isLoading && (
-                        <p className="text-sm text-muted-foreground">
-                          Ask a question to see AI-powered insights here.
                         </p>
                       )}
                     </div>
