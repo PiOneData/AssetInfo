@@ -143,21 +143,25 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
         }}
       >
         <DialogTrigger asChild>
-          <Button
-            size="sm"
-            className="rounded-full w-10 h-10 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-            data-testid="button-ai-assistant"
-          >
-            <Bot className="h-5 w-5" />
-          </Button>
+        <Button
+          size="sm"
+          style={{
+            background: "var(--ai-button-bg)",
+            borderColor: "var(--ai-button-border)",
+          }}
+          className="rounded-full w-11 h-11 text-white shadow-lg ring-2 ring-[color:var(--ai-button-border)]/40 hover:ring-[color:var(--ai-button-border)]/60 transition-all"
+          data-testid="button-ai-assistant"
+        >
+          <Bot className="h-5 w-5 text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.25)]" />
+        </Button>
         </DialogTrigger>
         
         <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
           <div className="flex flex-col h-[70vh]">
-            <div className="border-b border-border/60 px-6 py-4 bg-background/95">
+            <div className="border-b border-border px-6 py-4 bg-background">
               <DialogHeader className="space-y-2">
                 <DialogTitle className="flex items-center gap-3 text-xl">
-                  <div className="p-2 rounded-full bg-gradient-to-r from-blue-500/80 to-purple-600/80">
+                  <div className="p-2 rounded-full bg-primary text-primary-foreground">
                     <Sparkles className="h-5 w-5 text-white" />
                   </div>
                   ITAM AI Assistant
@@ -171,7 +175,7 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 bg-muted/10">
               {!messages.length && !errorMessage && !isLoading ? (
                 <div className="flex flex-col items-center text-center space-y-4 mt-6">
-                  <div className="p-4 rounded-2xl bg-background border border-border/60 shadow-inner">
+                  <div className="p-4 rounded-2xl bg-card border border-border shadow-none">
                     <div className="flex items-center gap-3 text-lg font-semibold">
                       <Sparkles className="h-5 w-5 text-blue-500" />
                       AssetVault Assistant
@@ -183,16 +187,16 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
                   <div className="w-full space-y-2">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground/80">Try asking:</p>
                     <div className="grid gap-2 text-sm text-muted-foreground">
-                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                      <div className="rounded-lg border border-border px-3 py-2 bg-card">
                         “How many laptops are currently deployed?”
                       </div>
-                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                      <div className="rounded-lg border border-border px-3 py-2 bg-card">
                         “Which software licenses expire next quarter?”
                       </div>
-                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                      <div className="rounded-lg border border-border px-3 py-2 bg-card">
                         “Show me assets in Bangalore with warranties ending soon.”
                       </div>
-                      <div className="rounded-lg border border-border/50 px-3 py-2 bg-background/80">
+                      <div className="rounded-lg border border-border px-3 py-2 bg-card">
                         “Summarize open tickets by priority.”
                       </div>
                     </div>
@@ -202,15 +206,15 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
                 <div className="flex justify-center">
                   <div className="w-full max-w-2xl">
                     <div className="text-xs font-medium text-muted-foreground mb-2">Conversation</div>
-                    <div className="rounded-2xl border border-border bg-background/95 shadow-lg p-4 space-y-3">
+                    <div className="rounded-2xl border border-border bg-card shadow-sm p-4 space-y-3">
                       {messages.map((message, index) => (
                         <div
                           key={`${message.role}-${index}`}
                           ref={index === messages.length - 1 ? lastMessageRef : undefined}
                           className={`p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-line border ${
                             message.role === "user"
-                              ? "bg-muted/25 border-border/70 border-l-4 border-l-primary/50"
-                              : "bg-background/90 border-primary/40 shadow-[0_0_16px_rgba(99,102,241,0.2)] border-l-4 border-l-blue-500/60"
+                              ? "bg-muted/25 border-border border-l-4 border-l-primary/40"
+                              : "bg-card border-border border-l-4 border-l-blue-500/40"
                           }`}
                         >
                           <p className={`text-xs font-semibold tracking-wide mb-1 ${message.role === "user" ? "text-muted-foreground" : "text-blue-200"}`}>
@@ -301,7 +305,7 @@ function DraggableAIAssistant({ position }: { position: { x: number; y: number }
 export function FloatingAIAssistant() {
   const [position, setPosition] = useState(() => {
     const saved = localStorage.getItem('ai-assistant-position');
-    const defaultPosition = { x: window.innerWidth - 140, y: 80 };
+    const defaultPosition = { x: 280, y: 120 };
     
     if (saved) {
       try {

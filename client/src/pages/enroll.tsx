@@ -66,11 +66,11 @@ const Enroll: React.FC = () => {
 
 	return (
 		<div className="min-h-screen bg-background flex items-center justify-center p-4 page-enter">
-			<Card className="w-full max-w-3xl bg-surface/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]">
+			<Card className="w-full max-w-3xl rounded-xl border border-border shadow-sm">
 				<div className="p-8 md:p-12">
 					{/* Header */}
 					<div className="text-center mb-8">
-						<h1 className="text-4xl font-semibold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
+						<h1 className="text-4xl font-semibold mb-3 text-foreground">
 							Device Enrollment
 						</h1>
 						<p className="text-gray-400 text-lg leading-relaxed">
@@ -85,7 +85,7 @@ const Enroll: React.FC = () => {
 					{/* Windows Instructions */}
 					{isWin && (
 						<div className="space-y-6">
-							<div className="bg-white/5 border border-white/10 rounded-lg p-6">
+							<div className="bg-card border border-border rounded-lg p-6">
 								<h3 className="text-xl font-medium text-foreground mb-4 flex items-center gap-2">
 									<Download className="h-5 w-5 text-blue-400" />
 									Windows Installation Steps
@@ -98,7 +98,7 @@ const Enroll: React.FC = () => {
 								</ol>
 							</div>
 							
-							<div className="bg-white/5 border border-white/10 rounded-lg p-6">
+							<div className="bg-card border border-border rounded-lg p-6">
 								<p className="text-gray-300 mb-4">
 									<strong className="text-foreground">Alternative downloads:</strong>
 								</p>
@@ -106,7 +106,7 @@ const Enroll: React.FC = () => {
 									<Button
 										asChild
 										variant="outline"
-										className="border-white/20 hover:border-blue-400/50 hover:bg-white/10"
+										className="border-border hover:bg-surface-light"
 									>
 										<a href={WINDOWS_INSTALLER_EXE}>
 											<Download className="h-4 w-4 mr-2" />
@@ -116,7 +116,7 @@ const Enroll: React.FC = () => {
 									<Button
 										asChild
 										variant="outline"
-										className="border-white/20 hover:border-blue-400/50 hover:bg-white/10"
+										className="border-border hover:bg-surface-light"
 									>
 										<a href={WINDOWS_AGENT_POWERSHELL} download>
 											<Terminal className="h-4 w-4 mr-2" />
@@ -132,7 +132,7 @@ const Enroll: React.FC = () => {
 					{isLinuxOS && (
 						<div className="space-y-6">
 							{/* Main Command Card */}
-							<div className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-xl p-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]">
+							<div className="bg-card border border-border rounded-xl p-8 shadow-sm">
 								<h2 className="text-2xl font-semibold text-foreground mb-4 flex items-center gap-2">
 									<Terminal className="h-6 w-6 text-blue-400" />
 									Register Your Linux Device
@@ -158,7 +158,7 @@ const Enroll: React.FC = () => {
 												setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
 											});
 										}}
-										className="mt-4 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-md hover:shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all duration-200 hover:-translate-y-0.5"
+										className="mt-4 bg-primary text-[color:var(--text-inverse)] shadow-sm"
 									>
 										<Copy className="h-4 w-4 mr-2" />
 										Copy Command
@@ -167,7 +167,7 @@ const Enroll: React.FC = () => {
 							</div>
 							
 							{/* Info Card */}
-							<div className="bg-white/5 border border-white/10 rounded-lg p-6">
+							<div className="bg-card border border-border rounded-lg p-6">
 								<h4 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
 									<Info className="h-5 w-5 text-blue-400" />
 									What happens:
@@ -190,7 +190,7 @@ const Enroll: React.FC = () => {
 					
 					{/* Unsupported Platform */}
 					{!isWin && !isLinuxOS && (
-						<div className="bg-white/5 border border-white/10 rounded-lg p-6">
+						<div className="bg-card border border-border rounded-lg p-6">
 							<h3 className="text-xl font-medium text-foreground mb-4">
 								Supported Platforms
 							</h3>

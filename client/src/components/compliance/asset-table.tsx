@@ -15,6 +15,9 @@ export interface ComplianceAssetTableProps {
   onDeleteAsset?: (assetId: string) => void;
   deletingAssetId?: string | null;
   emptyMessage?: string;
+  issueKey?: string;
+  issueContext?: any;
+  onSelectAsset?: (params: { asset: ComplianceAssetSummary; record: any; issueKey?: string; issueContext?: any }) => void;
 }
 
 const COLUMNS = [
@@ -213,11 +216,13 @@ export function ComplianceAssetTable({
   assetLookup,
   onViewAsset,
   onEditAsset,
-  onViewDevices,
   onNavigate,
   onDeleteAsset,
   deletingAssetId,
   emptyMessage,
+  issueKey,
+  issueContext,
+  onSelectAsset,
 }: ComplianceAssetTableProps) {
   if (!assets || assets.length === 0) {
     return (
@@ -247,12 +252,22 @@ export function ComplianceAssetTable({
             const record = assetLookup.get(asset.id) || null;
             const assetType = (record?.type || asset.type || "").toLowerCase();
             return (
-              <tr key={asset.id} className="border-b last:border-b-0">
+              <tr
+                key={asset.id}
+                className={`border-b last:border-b-0 ${
+                  onSelectAsset && issueKey ? "hover:bg-muted/60 cursor-pointer" : ""
+                }`}
+                onClick={() => {
+                  if (onSelectAsset && issueKey) {
+                    onSelectAsset({ asset, record, issueKey, issueContext });
+                  }
+                }}
+              >
                 {COLUMNS.map((column) => {
                   const key = column.key;
                   if (key === "actions") {
                     return (
-                      <td key={key} className="px-3 py-2 whitespace-nowrap">
+                      <td key={key} className="px-3 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
                           {assetType === "software" && (
                             <SoftwareDevicesButton

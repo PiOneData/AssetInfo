@@ -19,27 +19,11 @@ export function GlassCard({
   return (
     <div
       className={cn(
-        // Base glassmorphism styles with premium depth
-        'relative rounded-xl backdrop-blur-md border',
-        gradient 
-          ? 'bg-gradient-to-br from-surface/70 to-surface-light/70' 
-          : 'bg-surface/70',
-        'border-white/10',
-        // Inner border for depth
-        'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]',
-        // Shadows with ambient glow
-        glow ? 'shadow-glow' : 'shadow-[0_8px_32px_rgba(0,0,0,0.3)]',
-        // Hover effects with smooth transitions
-        hover && 'transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_20px_rgba(59,130,246,0.2)] hover:border-white/20 hover:-translate-y-0.5',
-        // Animation
-        'animate-fade-in',
+        'relative rounded-xl border bg-card text-card-foreground shadow-sm transition-none',
+        hover && 'hover:shadow',
         className
       )}
     >
-      {/* Inner glow effect */}
-      {glow && (
-        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-brand-primary/10 to-transparent pointer-events-none" />
-      )}
       {children}
     </div>
   );
@@ -52,7 +36,7 @@ interface GlassCardHeaderProps {
 
 export function GlassCardHeader({ children, className }: GlassCardHeaderProps) {
   return (
-    <div className={cn('p-6 border-b border-white/5', className)}>
+    <div className={cn('p-6 border-b border-border', className)}>
       {children}
     </div>
   );

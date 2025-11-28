@@ -1047,7 +1047,7 @@ export function WorldMap() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 h-[400px]">
-            <div className="w-72 flex-shrink-0">
+            <div className="w-80 flex-shrink-0">
               <div className="h-full border rounded-lg bg-muted/30">
                 <div className="p-3 border-b">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
@@ -1074,7 +1074,7 @@ export function WorldMap() {
                             key={key}
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-between h-auto p-2 text-left hover:bg-muted"
+                            className="w-full justify-between h-auto p-2 pr-10 text-left hover:bg-muted"
                             onClick={() => zoomToLocation(locationScope)}
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1084,7 +1084,7 @@ export function WorldMap() {
                               </span>
                             </div>
                             <span
-                              className="text-[11px] font-semibold px-2 py-1 rounded-full shadow-sm bg-background cursor-pointer border border-primary/50"
+                              className="inline-flex items-center justify-center min-w-[1.75rem] h-6 px-2 text-[11px] font-semibold rounded-full shadow-sm bg-[color:var(--badge-background)] text-[color:var(--badge-text-color)] cursor-pointer border border-[color:var(--badge-border-color)] leading-tight"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleLocationSummary(locationScope);
@@ -1234,7 +1234,7 @@ export function WorldMap() {
       </Card>
 
       <Dialog open={summaryModal.open} onOpenChange={(open) => !open && closeSummaryModal()}>
-        <DialogOverlay className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[2050]" />
+        <DialogOverlay className="fixed inset-0 bg-black/70 z-[2050]" />
         <DialogContent className="max-w-md w-[90vw] bg-background border border-muted/50 shadow-2xl z-[2100] max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-lg">Asset Count Summary</DialogTitle>
@@ -1290,7 +1290,7 @@ export function WorldMap() {
       </Dialog>
 
       <Dialog open={detailModal.open} onOpenChange={(open) => !open && closeDetailModal()}>
-        <DialogOverlay className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[2150]" />
+        <DialogOverlay className="fixed inset-0 bg-black/70 z-[2150]" />
         <DialogContent className="max-w-6xl w-[95vw] bg-background border border-muted/50 shadow-2xl z-[2200] max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Detailed Asset List</DialogTitle>

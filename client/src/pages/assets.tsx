@@ -387,10 +387,10 @@ const totalColumnCount = columnCount + 1; // include View Devices column
       </div>
 
       {/* Enhanced Assets Table */}
-      <div className="bg-gradient-to-br from-surface/70 to-surface-light/70 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden shadow-card">
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-[rgba(20,25,45,0.8)] backdrop-blur-sm border-b border-white/[0.08]" style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0)), rgba(20,25,45,0.8)' }}>
+          <table className="w-full asset-table">
+            <thead className="bg-surface-light border-b border-border">
               <tr>
                 {columnVisibility.name && (
                   <th className="text-left py-3 px-4 font-medium text-[#E5E7EB] text-sm min-w-[200px]">
@@ -611,7 +611,10 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                 )}
 
                 {columnVisibility.licenseKey && processedAssets.some((a: any) => a.type === "Software") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[150px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[150px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     <div className="flex items-center space-x-2">
                       <Code className="h-4 w-4 mr-1" />
                       <span>License Key</span>
@@ -627,7 +630,10 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                 )}
 
                 {columnVisibility.renewalDate && processedAssets.some((a: any) => a.type === "Software") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[140px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[140px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 mr-1" />
                       <span>Renewal Date</span>
@@ -657,14 +663,20 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                 )}
 
                 {columnVisibility.viewDevices && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[140px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[140px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     View Devices
                   </th>
                 )}
 
                 {/* Hardware-specific columns - only show if there are Hardware assets */}
                 {columnVisibility.ipAddress && processedAssets.some((a: any) => a.type === "Hardware") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[130px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[130px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     <div className="flex items-center space-x-2">
                       <Monitor className="h-4 w-4 mr-1" />
                       <span>IP Address</span>
@@ -680,7 +692,10 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                 )}
 
                 {columnVisibility.hostname && processedAssets.some((a: any) => a.type === "Hardware") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[150px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[150px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     <div className="flex items-center space-x-2">
                       <Monitor className="h-4 w-4 mr-1" />
                       <span>Hostname</span>
@@ -696,7 +711,10 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                 )}
 
                 {columnVisibility.osName && processedAssets.some((a: any) => a.type === "Hardware") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[120px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[120px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     <div className="flex items-center space-x-2">
                       <Monitor className="h-4 w-4 mr-1" />
                       <span>OS</span>
@@ -712,7 +730,10 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                 )}
 
                 {columnVisibility.osVersion && processedAssets.some((a: any) => a.type === "Hardware") && (
-                  <th className="text-left py-3 px-4 font-medium text-muted-foreground text-sm min-w-[100px]">
+                  <th
+                    className="text-left py-3 px-4 font-medium text-sm min-w-[100px]"
+                    style={{ color: typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "#3A3F52" : undefined }}
+                  >
                     <div className="flex items-center space-x-2">
                       <Monitor className="h-4 w-4 mr-1" />
                       <span>OS Version</span>
@@ -967,7 +988,7 @@ const totalColumnCount = columnCount + 1; // include View Devices column
                     {columnVisibility.name && (
                       <td className="py-3 px-4">
                         <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-surface-lighter rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-gradient-primary group-hover:shadow-glow transition-all duration-300">
+                          <div className="w-8 h-8 bg-surface-lighter rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:shadow-sm transition-all duration-300">
                             <Icon className="text-text-secondary group-hover:text-white h-4 w-4 transition-colors duration-300" />
                           </div>
                           <div className="min-w-0 flex-1">

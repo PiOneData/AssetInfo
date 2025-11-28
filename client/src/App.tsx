@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { QuickActionsButton } from "@/components/layout/quick-actions-button";
-import { useState } from "react";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -25,6 +24,7 @@ import SearchResults from "@/pages/search-results";
 import ComplianceOverviewPage from "@/pages/compliance";
 import ComplianceLicensePage from "@/pages/compliance-license";
 import ComplianceScoreDetails from "@/pages/compliance/ComplianceScoreDetails";
+import { ThemeProvider } from "@/contexts/theme-context";
 
 function Router() {
   return (
@@ -137,15 +137,17 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-          <QuickActionsButton />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+            <QuickActionsButton />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

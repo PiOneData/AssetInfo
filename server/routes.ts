@@ -838,7 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         margin:0;
         padding:0;
         min-height:100vh;
-        background:linear-gradient(135deg,#090D1A 0%,#0C1024 50%,#161B3A 100%);
+        background:linear-gradient(135deg,#1E1E1E 0%,#232323 50%,#1A1C1E 100%);
         color:#e6edf3;
         display:flex;
         align-items:center;

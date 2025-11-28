@@ -21,10 +21,10 @@ export function Layout({
   onBulkUploadClick 
 }: LayoutProps) {
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[var(--background)] text-text_primary">
       <Sidebar />
       
-      <main className="flex-1 md:ml-64 overflow-auto">
+      <main className="flex flex-col flex-1 md:ml-64 overflow-auto bg-[var(--background)] px-4 sm:px-6 lg:px-10 py-6 space-y-6">
         <TopBar 
           title={title}
           description={description}

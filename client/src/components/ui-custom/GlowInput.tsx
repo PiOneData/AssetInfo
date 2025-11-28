@@ -30,13 +30,11 @@ export function GlowInput({
         <input
           className={cn(
             // Base styles
-            'w-full rounded-lg px-4 py-2.5 transition-all duration-300',
-            'bg-surface-light/50 backdrop-blur-sm',
-            'border border-white/10',
+            'w-full rounded-lg px-4 py-2.5 transition-colors duration-200',
+            'bg-input border border-input-border shadow-none',
             'text-text-primary placeholder:text-text-muted',
             // Focus styles
-            'focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary/50',
-            'focus:shadow-glow',
+            'focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary/30',
             // Icon padding
             icon && 'pl-10',
             // Error styles
@@ -74,13 +72,11 @@ export function GlowTextarea({
       <textarea
         className={cn(
           // Base styles
-          'w-full rounded-lg px-4 py-2.5 transition-all duration-300',
-          'bg-surface-light/50 backdrop-blur-sm',
-          'border border-white/10',
+          'w-full rounded-lg px-4 py-2.5 transition-colors duration-200',
+          'bg-input border border-input-border shadow-none',
           'text-text-primary placeholder:text-text-muted',
           // Focus styles
-          'focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary/50',
-          'focus:shadow-glow',
+          'focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary/30',
           // Error styles
           error && 'border-status-danger/50 focus:ring-status-danger/50',
           className

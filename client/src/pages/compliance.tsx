@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
   type ComplianceAssetSummary,
 } from "@/hooks/use-compliance";
 import { ComplianceAssetTable } from "@/components/compliance/asset-table";
+import { RemediationModal, RemediationContext } from "@/components/compliance/remediation-modal";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerClose } from "@/components/ui/drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DeviceSoftware } from "@/components/assets/DeviceSoftware";
@@ -24,6 +25,7 @@ import type { InsertAsset } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getRolePermissions } from "@/lib/permissions";
+import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";
 
 const severityStyles: Record<ComplianceIssue["severity"], string> = {
   low: "bg-emerald-500/10 text-emerald-400",
@@ -31,6 +33,17 @@ const severityStyles: Record<ComplianceIssue["severity"], string> = {
   high: "bg-orange-500/10 text-orange-400",
   critical: "bg-red-500/10 text-red-400",
 };
+
+const riskFactorMappings = [
+  { match: /missing owner/i, key: "missingUser", label: "Missing Owner" },
+  { match: /missing location/i, key: "missingLocation", label: "Missing Location" },
+  { match: /no warranty/i, key: "noWarranty", label: "No Warranty" },
+  { match: /expired warranty/i, key: "expiredWarranty", label: "Expired Warranty" },
+  { match: /outdated os/i, key: "outdatedOs", label: "Outdated OS" },
+  { match: /unauthorized software/i, key: "unlicensedSoftware", label: "Unlicensed Software" },
+  { match: /idle/i, key: "idleAssets", label: "Idle Asset" },
+  { match: /patch/i, key: "missingPatches", label: "Missing Patches" },
+];
 
 const emptyMessages: Record<string, string> = {
   missingUser: "No assets missing owners",
@@ -67,6 +80,7 @@ function buildHighRiskSummary(asset: HighRiskAsset): ComplianceAssetSummary {
     assignedUserName: asset.owner,
     assignedUserEmail: null,
     assignedUserEmployeeId: null,
+    riskFactors: asset.riskFactors,
   };
 }
 
@@ -94,9 +108,83 @@ export default function ComplianceOverviewPage() {
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<any | null>(null);
   const [isAssetFormOpen, setIsAssetFormOpen] = useState(false);
+  const [remediationContext, setRemediationContext] = useState<RemediationContext | null>(null);
+  const [resolvedIssueAssets, setResolvedIssueAssets] = useState<Record<string, Set<string>>>({});
 
   const issues = useMemo(() => data?.issues || [], [data]);
-  const highRiskAssets = useMemo(() => data?.highRiskAssetsList || [], [data]);
+  const filteredIssues = useMemo(() => {
+    return issues.map((issue) => {
+      const dismissed = resolvedIssueAssets[issue.key];
+      if (!dismissed || dismissed.size === 0) return issue;
+      const filteredAssets = issue.assets?.filter((asset) => !dismissed.has(asset.id)) || [];
+      return {
+        ...issue,
+        assets: filteredAssets,
+        count: filteredAssets.length,
+      };
+    });
+  }, [issues, resolvedIssueAssets]);
+  const visibleIssues = useMemo(
+    () => filteredIssues.filter((issue) => (issue.assets?.length ?? issue.count ?? 0) > 0),
+    [filteredIssues]
+  );
+
+  const mapRiskFactorsToIssues = useCallback((factors: string[] = []) => {
+    const matches: { key: string; label: string }[] = [];
+    factors.forEach((factor) => {
+      const mapping = riskFactorMappings.find((entry) => entry.match.test(factor));
+      if (mapping && !matches.find((item) => item.key === mapping.key)) {
+        matches.push({ key: mapping.key, label: mapping.label });
+      }
+    });
+    return matches;
+  }, []);
+
+  const gatherIssueDetails = useCallback(
+    (
+      assetId: string,
+      initialKey?: string,
+      initialLabel?: string,
+      riskFactors?: string[]
+    ) => {
+      const keys = new Set<string>();
+      const labels: string[] = [];
+
+      visibleIssues.forEach((issue) => {
+        if (issue.assets?.some((asset) => asset.id === assetId)) {
+          keys.add(issue.key);
+          labels.push(issue.label);
+        }
+      });
+
+      mapRiskFactorsToIssues(riskFactors || []).forEach((mapping) => {
+        keys.add(mapping.key);
+        labels.push(mapping.label);
+      });
+
+      if (initialKey && initialKey !== "highRisk") {
+        keys.add(initialKey);
+        if (initialLabel) labels.push(initialLabel);
+      }
+
+      if (!keys.size && initialKey) {
+        keys.add(initialKey);
+        if (initialLabel) labels.push(initialLabel);
+      }
+
+      return {
+        keys: Array.from(keys),
+        labels: Array.from(new Set(labels)),
+      };
+    },
+    [visibleIssues, mapRiskFactorsToIssues]
+  );
+  const highRiskAssets = useMemo(() => {
+    const base = data?.highRiskAssetsList || [];
+    const dismissed = resolvedIssueAssets.highRisk;
+    if (!dismissed || dismissed.size === 0) return base;
+    return base.filter((asset) => !dismissed.has(asset.id));
+  }, [data, resolvedIssueAssets]);
 
   const ensurePermission = (allowed: boolean, message: string) => {
     if (!allowed) {
@@ -139,6 +227,58 @@ export default function ComplianceOverviewPage() {
     deleteAssetMutation.mutate(assetId);
   };
 
+  const handleResolveAsset = (issueKeys: string[], assetId: string, includeHighRisk?: boolean) => {
+    setResolvedIssueAssets((prev) => {
+      const next = { ...prev };
+      issueKeys.forEach((key) => {
+        if (!key) return;
+        const current = new Set(next[key] || []);
+        current.add(assetId);
+        next[key] = current;
+      });
+      if (includeHighRisk) {
+        const hr = new Set(next.highRisk || []);
+        hr.add(assetId);
+        next.highRisk = hr;
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAsset = (params: { asset: ComplianceAssetSummary; record: any; issueKey?: string; issueContext?: any }) => {
+    if (!ensurePermission(permissions.canManageAssets, "You cannot remediate assets.")) return;
+    const asset = assetLookup.get(params.asset.id);
+    const issueDetails = gatherIssueDetails(
+      params.asset.id,
+      params.issueKey,
+      params.issueContext?.label,
+      params.issueContext?.riskFactors
+    );
+
+    if (!issueDetails.keys.length && !params.issueKey) {
+      return;
+    }
+
+    setRemediationContext({
+      issueKeys: issueDetails.keys.length ? issueDetails.keys : params.issueKey ? [params.issueKey] : [],
+      issueLabels: issueDetails.labels,
+      primaryIssueKey: (issueDetails.keys.length ? issueDetails.keys : [params.issueKey])[0],
+      primaryLabel: issueDetails.labels[0] || params.issueContext?.label,
+      summary: params.asset,
+      asset,
+      riskFactors: params.issueContext?.riskFactors,
+      fromHighRisk: params.issueKey === "highRisk",
+    });
+  };
+
+  useEffect(() => {
+    if (!expandedIssue) return;
+    const current = visibleIssues.find((issue) => issue.key === expandedIssue);
+    if (current && (current.assets?.length || 0) === 0) {
+      setExpandedIssue(null);
+    }
+  }, [expandedIssue, visibleIssues]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -177,10 +317,10 @@ export default function ComplianceOverviewPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {issues.length === 0 ? (
+                {visibleIssues.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No compliance issues detected.</p>
                 ) : (
-                  issues.map((issue) => {
+                  visibleIssues.map((issue) => {
                     const isExpanded = expandedIssue === issue.key;
                     return (
                       <div key={issue.key} className="rounded-lg border bg-muted/40">
@@ -221,6 +361,9 @@ export default function ComplianceOverviewPage() {
                               deletingAssetId={deletingAssetId}
                               onNavigate={navigate}
                               emptyMessage={emptyMessages[issue.key] || emptyMessages.default}
+                              issueKey={issue.key}
+                              issueContext={{ label: issue.label }}
+                              onSelectAsset={handleSelectAsset}
                             />
                           </div>
                         )}
@@ -291,6 +434,9 @@ export default function ComplianceOverviewPage() {
                                 deletingAssetId={deletingAssetId}
                                 onNavigate={navigate}
                                 emptyMessage="No high-risk data"
+                                issueKey="highRisk"
+                                issueContext={{ label: "High-Risk Asset", riskFactors: asset.riskFactors }}
+                                onSelectAsset={handleSelectAsset}
                               />
                             </div>
                           )}
@@ -398,6 +544,43 @@ export default function ComplianceOverviewPage() {
           isLoading={updateAssetMutation.isPending}
         />
       )}
+      <FloatingAIAssistant />
+      <RemediationModal
+        open={Boolean(remediationContext)}
+        onOpenChange={(open) => {
+          if (!open) setRemediationContext(null);
+        }}
+        context={remediationContext}
+        isSubmitting={updateAssetMutation.isPending}
+        onSubmit={async (payload) => {
+          if (!remediationContext?.summary?.id) return;
+          await new Promise<void>((resolve, reject) => {
+            updateAssetMutation.mutate(
+              { id: remediationContext.summary.id, data: payload },
+              {
+                onSuccess: () => {
+                  const keysToResolve =
+                    remediationContext.issueKeys && remediationContext.issueKeys.length
+                      ? remediationContext.issueKeys
+                      : remediationContext.issueKey
+                      ? [remediationContext.issueKey]
+                      : [];
+                  handleResolveAsset(
+                    keysToResolve,
+                    remediationContext.summary.id,
+                    remediationContext.fromHighRisk
+                  );
+                  setRemediationContext(null);
+                  resolve();
+                },
+                onError: (error) => {
+                  reject(error);
+                },
+              }
+            );
+          });
+        }}
+      />
     </div>
   );
 }

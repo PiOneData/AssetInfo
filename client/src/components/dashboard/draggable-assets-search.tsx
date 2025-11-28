@@ -49,7 +49,7 @@ function DraggableAssetsSearchInternal({
     <div
       ref={setNodeRef}
       style={style}
-      className="group shadow-lg border rounded-lg bg-background/95 backdrop-blur-sm p-3"
+      className="group rounded-xl border border-border bg-card shadow-sm p-3"
       data-testid="draggable-assets-search-container"
     >
       {/* Drag Handle */}

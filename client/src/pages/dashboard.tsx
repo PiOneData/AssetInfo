@@ -96,14 +96,14 @@ function createDashboardTiles(
       width: 336,
       height: 112,
       component: (
-        <div className="bg-gradient-to-br from-surface/70 to-surface-light/70 backdrop-blur-md rounded-xl border border-white/10 p-4 h-full flex items-center justify-between hover:shadow-card-hover transition-all duration-300 group" data-testid="card-deployed-assets">
+        <div className="rounded-xl border border-border bg-card p-4 h-full flex items-center justify-between shadow-sm" data-testid="card-deployed-assets">
           <div>
             <p className="text-xs font-medium text-text-secondary mb-1">Deployed</p>
             <p className="text-3xl font-display font-bold text-status-success" data-testid="count-deployed">
               {metrics?.assetStatusCounts?.deployed || 0}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-lg bg-gradient-success flex items-center justify-center shadow-glow group-hover:shadow-glow-strong transition-all">
+          <div className="w-10 h-10 rounded-lg bg-gradient-success flex items-center justify-center shadow-sm">
             <div className="w-3 h-3 rounded-full bg-white"></div>
           </div>
         </div>
@@ -117,14 +117,14 @@ function createDashboardTiles(
       width: 336,
       height: 112,
       component: (
-        <div className="bg-gradient-to-br from-surface/70 to-surface-light/70 backdrop-blur-md rounded-xl border border-white/10 p-4 h-full flex items-center justify-between hover:shadow-card-hover transition-all duration-300 group" data-testid="card-in-stock-assets">
+        <div className="rounded-xl border border-border bg-card p-4 h-full flex items-center justify-between shadow-sm" data-testid="card-in-stock-assets">
           <div>
             <p className="text-xs font-medium text-text-secondary mb-1">In Stock</p>
             <p className="text-3xl font-display font-bold text-brand-primary" data-testid="count-in-stock">
               {metrics?.assetStatusCounts?.inStock || 0}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center shadow-glow group-hover:shadow-glow-strong transition-all">
+          <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center shadow-sm">
             <div className="w-3 h-3 rounded-full bg-white"></div>
           </div>
         </div>
@@ -138,14 +138,14 @@ function createDashboardTiles(
       width: 336,
       height: 112,
       component: (
-        <div className="bg-gradient-to-br from-surface/70 to-surface-light/70 backdrop-blur-md rounded-xl border border-white/10 p-4 h-full flex items-center justify-between hover:shadow-card-hover transition-all duration-300 group" data-testid="card-in-repair-assets">
+        <div className="rounded-xl border border-border bg-card p-4 h-full flex items-center justify-between shadow-sm" data-testid="card-in-repair-assets">
           <div>
             <p className="text-xs font-medium text-text-secondary mb-1">In Repair</p>
             <p className="text-3xl font-display font-bold text-status-warning" data-testid="count-in-repair">
               {metrics?.assetStatusCounts?.inRepair || 0}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-lg bg-gradient-warning flex items-center justify-center shadow-glow group-hover:shadow-glow-strong transition-all">
+          <div className="w-10 h-10 rounded-lg bg-gradient-warning flex items-center justify-center shadow-sm">
             <div className="w-3 h-3 rounded-full bg-white"></div>
           </div>
         </div>
@@ -159,14 +159,14 @@ function createDashboardTiles(
       width: 336,
       height: 112,
       component: (
-        <div className="bg-gradient-to-br from-surface/70 to-surface-light/70 backdrop-blur-md rounded-xl border border-white/10 p-4 h-full flex items-center justify-between hover:shadow-card-hover transition-all duration-300 group" data-testid="card-retired-assets">
+        <div className="rounded-xl border border-border bg-card p-4 h-full flex items-center justify-between shadow-sm" data-testid="card-retired-assets">
           <div>
             <p className="text-xs font-medium text-text-secondary mb-1">Retired</p>
             <p className="text-3xl font-display font-bold text-text-muted" data-testid="count-retired">
               {metrics?.assetStatusCounts?.retired || 0}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-lg bg-surface-lighter border border-white/10 flex items-center justify-center group-hover:shadow-card transition-all">
+          <div className="w-10 h-10 rounded-lg bg-surface-lighter border border-border flex items-center justify-center">
             <div className="w-3 h-3 rounded-full bg-text-muted"></div>
           </div>
         </div>
@@ -183,7 +183,7 @@ function createDashboardTiles(
       height: 300,
       component: (
         <div className="bg-card rounded-lg border h-full" data-testid="card-expiring-warranties">
-          <div className="flex items-center justify-between p-3 border-b">
+          <div className="flex items-center justify-between p-3 border-b border-border">
             <div className="flex items-center">
               <div className="w-2 h-2 rounded-full bg-yellow-600 mr-2"></div>
               <p className="text-sm font-medium text-foreground">Hardware Warranties</p>

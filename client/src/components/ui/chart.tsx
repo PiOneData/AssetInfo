@@ -52,7 +52,7 @@ const ChartContainer = React.forwardRef<
         data-chart={chartId}
         ref={ref}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-none [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-sector]:outline-none [&_.recharts-surface]:outline-none",
+          "flex aspect-video justify-center rounded-xl border border-border bg-card p-4 text-xs text-[color:var(--chart-label-color)] shadow-[var(--shadow-card)] [&_.recharts-cartesian-axis-tick_text]:fill-[color:var(--chart-label-color)] [&_.recharts-cartesian-grid_line]:stroke-[color:var(--chart-grid-color)] [&_.recharts-curve.recharts-tooltip-cursor]:stroke-[color:var(--chart-grid-color)] [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-none [&_.recharts-polar-grid_line]:stroke-[color:var(--chart-grid-color)] [&_.recharts-radial-bar-background-sector]:fill-[color:var(--chart-cursor-color)] [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[color:var(--chart-cursor-color)] [&_.recharts-reference-line]:stroke-[color:var(--chart-grid-color)] [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-sector]:outline-none [&_.recharts-surface]:outline-none",
           className
         )}
         {...props}

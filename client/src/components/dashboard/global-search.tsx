@@ -93,7 +93,7 @@ function DraggableGlobalSearch({ position, ...props }: GlobalSearchProps & { pos
       >
         <GripVertical className="h-3 w-3 text-muted-foreground" />
       </div>
-      <GlobalSearchInternal {...props} className="shadow-lg border rounded-lg bg-background/95 backdrop-blur-sm p-3" />
+      <GlobalSearchInternal {...props} className="rounded-xl border border-border bg-card shadow-sm p-3" />
     </div>
   );
 }
@@ -152,9 +152,13 @@ function GlobalSearchInternal({ onResultSelect, placeholder = "Search assets, us
 
 
   return (
-    <div ref={searchRef} className={`relative ${className || ''}`} data-testid="global-search">
+    <div
+      ref={searchRef}
+      className={`relative rounded-xl border border-border bg-card shadow-sm ${className || ''}`}
+      data-testid="global-search"
+    >
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[color:var(--icon-muted)]" />
         <Input
           id="global-search-input"
           type="text"
@@ -170,7 +174,7 @@ function GlobalSearchInternal({ onResultSelect, placeholder = "Search assets, us
             setIsOpen(query.length >= 2);
           }}
           onBlur={() => setIsFocused(false)}
-          className="pl-10 pr-24 sm:pr-28"
+          className="pl-10 pr-24 sm:pr-28 bg-input text-text-primary placeholder:text-placeholder-text border-input-border focus-visible:ring-ring focus-visible:border-ring"
           data-testid="input-search"
         />
         {query && (
@@ -181,7 +185,7 @@ function GlobalSearchInternal({ onResultSelect, placeholder = "Search assets, us
               setQuery('');
               setIsOpen(false);
             }}
-            className="absolute right-16 sm:right-20 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+            className="absolute right-16 sm:right-20 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             data-testid="button-clear-search"
           >
             <X className="h-3 w-3" />
@@ -191,12 +195,12 @@ function GlobalSearchInternal({ onResultSelect, placeholder = "Search assets, us
           variant="ghost"
           size="sm"
           onClick={handleSearch}
-          className="absolute right-8 sm:right-12 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+          className="absolute right-8 sm:right-12 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
           data-testid="button-search"
         >
           <Search className="h-3 w-3" />
         </Button>
-        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">
+        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-[color:var(--icon-muted)]">
           ⌘K
         </div>
       </div>

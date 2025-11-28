@@ -69,7 +69,51 @@ interface Vendor {
   updatedAt: string;
 }
 
-function AddVendorForm({ onSuccess, onCancel, editingVendor }: { onSuccess: () => void; onCancel: () => void; editingVendor?: Vendor }) {
+const DEFAULT_VENDOR_FORM_VALUES: VendorData = {
+  name: "",
+  email: "",
+  phone: "",
+  contactPerson: "",
+  address: "",
+  contractStartDate: undefined,
+  contractEndDate: undefined,
+  contractValue: "",
+  contractType: undefined,
+  notes: "",
+};
+
+const mapVendorToFormValues = (vendor?: Vendor | null): VendorData => {
+  if (!vendor) return { ...DEFAULT_VENDOR_FORM_VALUES };
+  return {
+    name: vendor.value || "",
+    email: vendor.metadata?.email || "",
+    phone: vendor.metadata?.phone || "",
+    contactPerson: vendor.metadata?.contactPerson || "",
+    address: vendor.metadata?.address || "",
+    contractStartDate: vendor.metadata?.contractStartDate
+      ? new Date(vendor.metadata.contractStartDate)
+      : undefined,
+    contractEndDate: vendor.metadata?.contractEndDate
+      ? new Date(vendor.metadata.contractEndDate)
+      : undefined,
+    contractValue:
+      vendor.metadata?.contractValue !== undefined ? String(vendor.metadata.contractValue) : "",
+    contractType: vendor.metadata?.contractType,
+    notes: vendor.description || "",
+  };
+};
+
+function AddVendorForm({
+  onSuccess,
+  onCancel,
+  editingVendor,
+  initialValues,
+}: {
+  onSuccess: () => void;
+  onCancel: () => void;
+  editingVendor?: Vendor;
+  initialValues: VendorData;
+}) {
   const { toast } = useToast();
   const [isContractStartOpen, setIsContractStartOpen] = useState(false);
   const [isContractEndOpen, setIsContractEndOpen] = useState(false);
@@ -82,47 +126,12 @@ function AddVendorForm({ onSuccess, onCancel, editingVendor }: { onSuccess: () =
   
   const form = useForm<VendorData>({
     resolver: zodResolver(vendorSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      contactPerson: "",
-      address: "",
-      contractValue: "",
-      contractType: undefined,
-      notes: "",
-    },
+    defaultValues: initialValues,
   });
 
   useEffect(() => {
-    if (editingVendor) {
-      form.reset({
-        name: editingVendor.value,
-        email: editingVendor.metadata?.email || "",
-        phone: editingVendor.metadata?.phone || "",
-        contactPerson: editingVendor.metadata?.contactPerson || "",
-        address: editingVendor.metadata?.address || "",
-        contractStartDate: editingVendor.metadata?.contractStartDate ? new Date(editingVendor.metadata.contractStartDate) : undefined,
-        contractEndDate: editingVendor.metadata?.contractEndDate ? new Date(editingVendor.metadata.contractEndDate) : undefined,
-        contractValue: editingVendor.metadata?.contractValue !== undefined ? String(editingVendor.metadata.contractValue) : "",
-        contractType: editingVendor.metadata?.contractType,
-        notes: editingVendor.description || "",
-      });
-    } else {
-      form.reset({
-        name: "",
-        email: "",
-        phone: "",
-        contactPerson: "",
-        address: "",
-        contractValue: "",
-        contractStartDate: undefined,
-        contractEndDate: undefined,
-        contractType: undefined,
-        notes: "",
-      } as Partial<VendorData>);
-    }
-  }, [editingVendor, form]);
+    form.reset(initialValues);
+  }, [form, initialValues]);
 
   const createVendor = useMutation({
     mutationFn: async (data: VendorData) => {
@@ -428,6 +437,7 @@ export default function Vendors() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+  const [vendorFormValues, setVendorFormValues] = useState<VendorData>(DEFAULT_VENDOR_FORM_VALUES);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [viewVendor, setViewVendor] = useState<Vendor | null>(null);
   const [isViewLoading, setIsViewLoading] = useState(false);
@@ -546,23 +556,25 @@ export default function Vendors() {
       return;
     }
     setEditingVendor(null);
+    setVendorFormValues({ ...DEFAULT_VENDOR_FORM_VALUES });
     setShowAddForm(true);
     if (!isNewVendor) {
       setLocation("/vendors/new");
     }
   };
 
-  const handleEditVendor = async (vendorId: string) => {
+  const handleEditVendor = async (vendor: Vendor) => {
     if (!ensurePermission(permissions.canEditVendors, "Only admins and IT managers can create or edit vendors.")) {
       return;
     }
+    setEditingVendor(vendor);
+    setVendorFormValues(mapVendorToFormValues(vendor));
+    setShowAddForm(true);
+
     try {
-      const vendorData = await fetchVendorById(vendorId);
+      const vendorData = await fetchVendorById(vendor.id);
       setEditingVendor(vendorData);
-      setShowAddForm(true);
-      if (!isNewVendor) {
-        setLocation("/vendors/new");
-      }
+      setVendorFormValues(mapVendorToFormValues(vendorData));
     } catch (error: any) {
       console.error("Failed to load vendor", error);
       toast({
@@ -576,6 +588,7 @@ export default function Vendors() {
   const handleCloseForm = () => {
     setShowAddForm(false);
     setEditingVendor(null);
+    setVendorFormValues({ ...DEFAULT_VENDOR_FORM_VALUES });
     if (isNewVendor) {
       setLocation("/vendors");
     }
@@ -657,7 +670,12 @@ export default function Vendors() {
               <div className="max-w-4xl mx-auto">
                 <Card>
                   <CardContent className="pt-6">
-                    <AddVendorForm onSuccess={handleCloseForm} onCancel={handleCloseForm} editingVendor={editingVendor || undefined} />
+                    <AddVendorForm
+                      onSuccess={handleCloseForm}
+                      onCancel={handleCloseForm}
+                      editingVendor={editingVendor || undefined}
+                      initialValues={vendorFormValues}
+                    />
                   </CardContent>
                 </Card>
               </div>
@@ -752,7 +770,7 @@ export default function Vendors() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleEditVendor(vendor.id)}
+                                onClick={() => handleEditVendor(vendor)}
                                 data-testid={`button-edit-vendor-${vendor.id}`}
                               >
                                 <Edit className="w-4 h-4" />

@@ -117,7 +117,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
+    <div
+      className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden text-white"
+      style={{ background: "linear-gradient(180deg, #343F78 0%, #252D52 100%)" }}
+    >
       {/* Animated gradient halo background */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
@@ -129,7 +132,7 @@ export default function Login() {
         />
       </div>
       
-      <Card className="w-full max-w-md relative z-10 card-enter inner-border card-depth backdrop-blur-xl">
+      <Card className="w-full max-w-md relative z-10 card-enter rounded-xl border border-border shadow-sm text-white">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center mb-4">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.4)]">

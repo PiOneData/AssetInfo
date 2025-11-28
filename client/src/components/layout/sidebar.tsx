@@ -58,6 +58,36 @@ export function Sidebar() {
   const [location] = useLocation();
   const { user, tenant, logout } = useAuth();
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Assets"]); // Assets expanded by default
+
+  const matchesRoute = (href: string) => {
+    if (!href) return false;
+    const [hrefPath, hrefQuery] = href.split("?");
+    const [locationPath, locationQuery = ""] = location.split("?");
+
+    // Exact path match (used for parent routes)
+    if (!hrefQuery) {
+      return locationPath === hrefPath || locationPath.startsWith(`${hrefPath}/`);
+    }
+
+    // Require both path and query parameters to match for routes with filters
+    if (locationPath !== hrefPath) {
+      return false;
+    }
+
+    try {
+      const locationParams = new URLSearchParams(locationQuery);
+      const hrefParams = new URLSearchParams(hrefQuery);
+
+      for (const [key, value] of hrefParams.entries()) {
+        if (locationParams.get(key) !== value) {
+          return false;
+        }
+      }
+      return true;
+    } catch {
+      return location.includes(hrefQuery);
+    }
+  };
   
   const toggleMenu = (menuName: string) => {
     setExpandedMenus(prev => 
@@ -70,16 +100,20 @@ export function Sidebar() {
   const isMenuExpanded = (menuName: string) => expandedMenus.includes(menuName);
   
   const isSubItemActive = (item: any) => {
-    if (!item.subItems) return location === item.href;
+    if (matchesRoute(item.href)) {
+      return true;
+    }
+
+    if (!item.subItems) return false;
     
     // Check if current location matches any subitem or sub-subitem
     return item.subItems.some((subItem: any) => {
-      if (location === subItem.href || location.includes(subItem.href)) return true;
+      if (matchesRoute(subItem.href)) return true;
       
       // Check nested subItems (third level)
       if (subItem.subItems) {
         return subItem.subItems.some((nestedItem: any) => 
-          location === nestedItem.href || location.includes(nestedItem.href)
+          matchesRoute(nestedItem.href)
         );
       }
       return false;
@@ -87,14 +121,14 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-surface to-surface-light border-r border-white/10 flex flex-col z-10 backdrop-blur-md">
-      <div className="p-6 border-b border-white/10">
+    <aside className="fixed top-0 left-0 h-screen w-64 bg-[color:var(--sidebar-background)] border-r border-border shadow-[var(--sidebar-shadow)] flex flex-col z-20">
+      <div className="p-6 border-b border-border">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center shadow-glow">
-            <Server className="text-white h-5 w-5" />
+            <Server className="text-[color:var(--sidebar-logo-color)] h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-lg font-display font-semibold text-text-primary">AssetVault</h1>
+            <h1 className="text-lg font-display font-semibold text-[color:var(--sidebar-logo-text)]">AssetVault</h1>
             <p className="text-xs text-text-secondary">{tenant?.name}</p>
           </div>
         </div>
@@ -167,8 +201,7 @@ export function Sidebar() {
                   {isExpanded && (
                     <div className="ml-8 mt-2 space-y-1">
                       {item.subItems.map((subItem: any) => {
-                        const isSubActive = location === subItem.href || 
-                          (location.includes('?') && location.includes(subItem.href.split('?')[1]));
+                        const isSubActive = matchesRoute(subItem.href);
                         const hasNestedSubItems = subItem.subItems && subItem.subItems.length > 0;
                         const isSubExpanded = isMenuExpanded(subItem.name);
                         
@@ -211,8 +244,7 @@ export function Sidebar() {
                                 {isSubExpanded && (
                                   <div className="ml-6 mt-1 space-y-1">
                                     {subItem.subItems.map((nestedItem: any) => {
-                                      const isNestedActive = location === nestedItem.href || 
-                                        location.includes(nestedItem.href);
+                                      const isNestedActive = matchesRoute(nestedItem.href);
                                       
                                       return (
                                         <Link key={nestedItem.name} href={nestedItem.href}>

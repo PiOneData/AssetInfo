@@ -48,13 +48,13 @@ export function FloatingActionMenu() {
           className="flex items-center gap-3 animate-in slide-in-from-bottom-4 fade-in duration-200"
           style={{ animationDelay: `${index * 50}ms` }}
         >
-          <span className="bg-gray-900/90 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg whitespace-nowrap">
+          <span className="bg-card text-foreground text-xs px-3 py-1.5 rounded-lg border border-border shadow-sm whitespace-nowrap">
             {action.label}
           </span>
           <Button
             size="sm"
             onClick={action.onClick}
-            className={`rounded-full w-12 h-12 shadow-lg ${action.bgClass} text-white`}
+            className={`rounded-full w-12 h-12 shadow-sm ${action.bgClass} text-white`}
           >
             <action.icon className="h-5 w-5" />
           </Button>
@@ -65,10 +65,10 @@ export function FloatingActionMenu() {
       <Button
         size="lg"
         onClick={() => setIsOpen(!isOpen)}
-        className={`rounded-full w-14 h-14 shadow-2xl transition-all duration-300 ${
+        className={`rounded-full w-14 h-14 shadow-sm transition-colors duration-200 ${
           isOpen 
             ? "bg-red-500 hover:bg-red-600 rotate-45" 
-            : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            : "bg-primary hover:bg-primary/90"
         }`}
       >
         {isOpen ? (

@@ -23,6 +23,7 @@ export interface ComplianceAssetSummary {
   assignedUserName: string | null;
   assignedUserEmail: string | null;
   assignedUserEmployeeId?: string | null;
+  riskFactors?: string[];
 }
 
 export interface ComplianceIssue {

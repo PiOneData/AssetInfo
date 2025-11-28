@@ -442,7 +442,7 @@ export default function Recommendations() {
               return (
                 <Card
                   key={recommendation.id}
-                  className="border border-border/70 bg-background/70 backdrop-blur-sm rounded-2xl shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5"
+                  className="rounded-xl border border-border bg-card shadow-sm"
                 >
                   <CardContent className="p-5 md:p-6 space-y-4">
                     <div className="flex items-start gap-4">

@@ -372,7 +372,7 @@ export function DeviceSoftware({ assetId, tenantId, canAssignSoftware = false }:
       </div>
 
       {/* sticky action bar so buttons stay visible */}
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t px-2 py-3 flex items-center justify-between">
+      <div className="sticky bottom-0 bg-background border-t px-2 py-3 flex items-center justify-between">
         <div className="text-xs text-muted-foreground">
           {selectedItems.length} selected
         </div>

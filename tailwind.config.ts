@@ -12,39 +12,39 @@ export default {
       },
       colors: {
         // Legacy shadcn/ui colors
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "var(--background, #2F3A6E)",
+        foreground: "var(--foreground, #F3F4F6)",
         card: {
-          DEFAULT: "var(--card)",
-          foreground: "var(--card-foreground)",
+          DEFAULT: "var(--card, #2B3563)",
+          foreground: "var(--card-foreground, #F5F6FF)",
         },
         popover: {
-          DEFAULT: "var(--popover)",
-          foreground: "var(--popover-foreground)",
+          DEFAULT: "var(--popover, #2E396A)",
+          foreground: "var(--popover-foreground, #F5F6FF)",
         },
         primary: {
-          DEFAULT: "var(--primary)",
-          foreground: "var(--primary-foreground)",
+          DEFAULT: "var(--primary, #4F46E5)",
+          foreground: "var(--primary-foreground, #FFFFFF)",
         },
         secondary: {
-          DEFAULT: "var(--secondary)",
-          foreground: "var(--secondary-foreground)",
+          DEFAULT: "var(--secondary, #4E5C96)",
+          foreground: "var(--secondary-foreground, #F5F6FF)",
         },
         muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
+          DEFAULT: "var(--muted, rgba(255,255,255,0.18))",
+          foreground: "var(--muted-foreground, rgba(255,255,255,0.55))",
         },
         accent: {
-          DEFAULT: "var(--accent)",
-          foreground: "var(--accent-foreground)",
+          DEFAULT: "var(--accent, #A7B4DA)",
+          foreground: "var(--accent-foreground, #1E1F22)",
         },
         destructive: {
-          DEFAULT: "var(--destructive)",
-          foreground: "var(--destructive-foreground)",
+          DEFAULT: "var(--destructive, #D32F2F)",
+          foreground: "var(--destructive-foreground, #FFFFFF)",
         },
-        border: "var(--border)",
-        input: "var(--input)",
-        ring: "var(--ring)",
+        border: "var(--border, rgba(255,255,255,0.1))",
+        input: "var(--input, rgba(0,0,0,0.15))",
+        ring: "var(--ring, rgba(255,255,255,0.25))",
         chart: {
           "1": "var(--chart-1)",
           "2": "var(--chart-2)",
@@ -53,33 +53,33 @@ export default {
           "5": "var(--chart-5)",
         },
         sidebar: {
-          DEFAULT: "var(--sidebar-background)",
-          foreground: "var(--sidebar-foreground)",
-          primary: "var(--sidebar-primary)",
-          "primary-foreground": "var(--sidebar-primary-foreground)",
-          accent: "var(--sidebar-accent)",
-          "accent-foreground": "var(--sidebar-accent-foreground)",
-          border: "var(--sidebar-border)",
-          ring: "var(--sidebar-ring)",
+          DEFAULT: "var(--sidebar-background, #262F59)",
+          foreground: "var(--sidebar-foreground, #E1E6FF)",
+          primary: "var(--sidebar-primary, #FFFFFF)",
+          "primary-foreground": "var(--sidebar-primary-foreground, #1C2445)",
+          accent: "var(--sidebar-accent, #3A4A85)",
+          "accent-foreground": "var(--sidebar-accent-foreground, #FFFFFF)",
+          border: "var(--sidebar-border, rgba(255,255,255,0.08))",
+          ring: "var(--sidebar-ring, rgba(8,11,29,0.5))",
         },
         // Custom futuristic dark theme colors
         surface: {
-          DEFAULT: "var(--bg-surface)",
-          light: "var(--bg-surface-light)",
-          lighter: "var(--bg-surface-lighter)",
+          DEFAULT: "var(--bg-surface, #2F3A6E)",
+          light: "var(--bg-surface-light, #344078)",
+          lighter: "var(--bg-surface-lighter, #3E4C8E)",
         },
         text: {
-          primary: "var(--text-primary)",
-          secondary: "var(--text-secondary)",
-          muted: "var(--text-muted)",
-          inverse: "var(--text-inverse)",
+          primary: "var(--text-primary, #F3F4F6)",
+          secondary: "var(--text-secondary, #E0E4EB)",
+          muted: "var(--text-muted, rgba(255,255,255,0.55))",
+          inverse: "var(--text-inverse, #1E1F22)",
         },
         brand: {
-          primary: "var(--color-primary)",
-          "primary-light": "var(--color-primary-light)",
-          "primary-dark": "var(--color-primary-dark)",
-          accent: "var(--color-accent)",
-          "accent-light": "var(--color-accent-light)",
+          primary: "var(--color-primary, #4F46E5)",
+          "primary-light": "var(--color-primary-light, #7F79F3)",
+          "primary-dark": "var(--color-primary-dark, #3C34B8)",
+          accent: "var(--color-accent, #A7B4DA)",
+          "accent-light": "var(--color-accent-light, #C3CEE8)",
         },
         status: {
           success: "var(--color-success)",
@@ -87,23 +87,39 @@ export default {
           danger: "var(--color-danger)",
           info: "var(--color-info)",
         },
+        app_bg: "#2F3A6E",
+        sidebar_bg: "#262F59",
+        card_bg: "#2B3563",
+        text_primary: "var(--text-primary, #F3F4F6)",
+        text_secondary: "var(--text-secondary, #E0E4EB)",
       },
       backgroundImage: {
-        'gradient-primary': 'var(--gradient-primary)',
-        'gradient-surface': 'var(--gradient-surface)',
-        'gradient-card': 'var(--gradient-card)',
-        'gradient-glow': 'var(--gradient-glow)',
-        'gradient-accent': 'var(--gradient-accent)',
-        'gradient-success': 'var(--gradient-success)',
-        'gradient-warning': 'var(--gradient-warning)',
-        'gradient-danger': 'var(--gradient-danger)',
+        "gradient-primary":
+          "var(--gradient-primary, linear-gradient(135deg, #4F46E5 0%, #8EA1D5 100%))",
+        "gradient-surface":
+          "var(--gradient-surface, linear-gradient(180deg, #2F3A6E 0%, #252D52 90%))",
+        "gradient-card":
+          "var(--gradient-card, linear-gradient(135deg, rgba(94,102,136,0.95) 0%, rgba(110,118,155,0.9) 100%))",
+        "gradient-glow":
+          "var(--gradient-glow, radial-gradient(circle at 20% 20%, rgba(167,180,218,0.35) 0%, transparent 60%))",
+        "gradient-accent":
+          "var(--gradient-accent, linear-gradient(135deg, #A7B4DA 0%, #C3CEE8 100%))",
+        "gradient-success":
+          "var(--gradient-success, linear-gradient(135deg, #58D5C4 0%, #81E6D9 100%))",
+        "gradient-warning":
+          "var(--gradient-warning, linear-gradient(135deg, #FFB347 0%, #FFD27F 100%))",
+        "gradient-danger":
+          "var(--gradient-danger, linear-gradient(135deg, #F38BA0 0%, #F6A7B8 100%))",
       },
       boxShadow: {
-        'glow': 'var(--shadow-glow)',
-        'glow-strong': 'var(--shadow-glow-strong)',
-        'card': 'var(--shadow-card)',
-        'card-hover': 'var(--shadow-card-hover)',
-        'inner-glow': 'var(--shadow-inner)',
+        glow: "var(--shadow-glow, 0 0 24px rgba(0,0,0,0.25))",
+        "glow-strong":
+          "var(--shadow-glow-strong, 0 0 32px rgba(0,0,0,0.35))",
+        card: "var(--shadow-card, 0 4px 16px rgba(0,0,0,0.18))",
+        "card-hover":
+          "var(--shadow-card-hover, 0 8px 24px rgba(0,0,0,0.22))",
+        "inner-glow":
+          "var(--shadow-inner, inset 0 1px 2px rgba(255,255,255,0.12))",
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

@@ -160,7 +160,7 @@ export function EnrollmentLinkCard({ baseUrl }: Props) {
           Enrollment link
         </Label>
         <div className="flex gap-2">
-          <Input id="enroll-link" readOnly value={enrollUrl} />
+          <Input id="enroll-link" readOnly value={enrollUrl} className="text-text_primary" />
           <Button variant="secondary" size="icon" title="Show QR (opens new tab)" asChild>
             <a
               href={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(

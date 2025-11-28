@@ -17,11 +17,11 @@ export function StatusBadge({
   className,
 }: StatusBadgeProps) {
   const variants = {
-    success: 'bg-[#0B3B24] text-[#4ADE80]', // Deployed - dark green bg with bright green text
-    warning: 'bg-[#422006] text-[#FACC15]', // In-Repair - dark yellow/orange bg with bright yellow text
-    danger: 'bg-[#3F0A0A] text-[#F87171]', // Disposed/Retired - dark red bg with bright red text
-    info: 'bg-[#0B3B24] text-[#4ADE80]', // In-Stock - dark green bg with bright green text
-    default: 'bg-surface-lighter text-text-primary border border-white/10',
+    success: 'bg-[rgba(88,213,196,0.18)] text-[var(--color-success)]',
+    warning: 'bg-[rgba(255,179,71,0.18)] text-[var(--color-warning)]',
+    danger: 'bg-[rgba(243,139,160,0.18)] text-[var(--color-danger)]',
+    info: 'bg-[rgba(143,200,255,0.18)] text-[var(--color-info)]',
+    default: 'bg-surface-lighter text-text-primary border border-border',
   };
 
   const sizes = {
@@ -31,10 +31,10 @@ export function StatusBadge({
   };
 
   const glowVariants = {
-    success: 'shadow-[0_0_10px_rgba(74,222,128,0.3)]', // #4ADE80 bright green glow
-    warning: 'shadow-[0_0_10px_rgba(250,204,21,0.3)]', // #FACC15 bright yellow glow
-    danger: 'shadow-[0_0_10px_rgba(248,113,113,0.3)]', // #F87171 bright red glow
-    info: 'shadow-[0_0_10px_rgba(74,222,128,0.3)]', // #4ADE80 bright green glow for in-stock
+    success: 'shadow-[0_0_16px_rgba(88,213,196,0.4)]',
+    warning: 'shadow-[0_0_16px_rgba(255,179,71,0.4)]',
+    danger: 'shadow-[0_0_16px_rgba(243,139,160,0.4)]',
+    info: 'shadow-[0_0_16px_rgba(143,200,255,0.35)]',
     default: '',
   };
 

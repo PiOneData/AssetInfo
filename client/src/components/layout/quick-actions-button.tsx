@@ -92,16 +92,20 @@ function DraggableQuickActions({ position }: { position: { x: number; y: number 
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button 
-            size="sm"
-            className="rounded-full w-10 h-10 shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 border-0"
-            data-testid="button-quick-actions"
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
+        <Button 
+          size="sm"
+          style={{
+            background: "var(--quick-action-button-bg)",
+            borderColor: "var(--quick-action-button-border)",
+          }}
+          className="rounded-full w-11 h-11 text-[color:var(--quick-action-icon-color)] shadow-lg ring-2 ring-[color:var(--quick-action-button-border)]/40 hover:ring-[color:var(--quick-action-button-border)]/60 transition-all"
+          data-testid="button-quick-actions"
+        >
+          <Plus className="h-5 w-5 text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.25)]" />
+        </Button>
         </DropdownMenuTrigger>
         
-        <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-md border shadow-xl" data-testid="menu-quick-actions">
+        <DropdownMenuContent align="end" className="w-48 border border-border bg-card shadow-sm" data-testid="menu-quick-actions">
           <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
             Quick Actions
           </DropdownMenuLabel>
@@ -173,7 +177,14 @@ export function QuickActionsButton() {
   const { isAuthenticated } = useAuth();
   const [position, setPosition] = useState(() => {
     const saved = localStorage.getItem('quick-actions-position');
-    return saved ? JSON.parse(saved) : { x: window.innerWidth - 80, y: 80 };
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // fall through to default
+      }
+    }
+    return { x: 210, y: 120 };
   });
 
   const sensors = useSensors(

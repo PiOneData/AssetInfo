@@ -3,6 +3,7 @@ import { GlassCard, GlassCardHeader, GlassCardContent, GlassCardTitle, GlassCard
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import type { Asset } from "@shared/schema";
 import { Laptop, Monitor, Printer, HardDrive, Cpu, Package } from "lucide-react";
+import { useTheme } from "@/contexts/theme-context";
 
 interface AssetAnalyticsProps {
   assets: Asset[];
@@ -41,6 +42,41 @@ const TOOLTIP_STYLE = {
 };
 
 export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
+  const { theme } = useTheme();
+  const isLightTheme = theme === "light";
+
+  const themeStyles = useMemo(() => {
+    const axisColor = isLightTheme ? "#3A3F52" : "#E5E7EB";
+    const sharedTextColor = isLightTheme ? "#3A3F52" : "#E5E7EB";
+    const tooltipStyle = isLightTheme
+      ? {
+          contentStyle: {
+            backgroundColor: "#FFFFFF",
+            border: "1px solid rgba(0,0,0,0.1)",
+            borderRadius: "0.5rem",
+            color: "#000000",
+            fontWeight: 500,
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+          },
+          labelStyle: { color: "#000000", fontWeight: 600 },
+          itemStyle: { color: "#000000" },
+          cursor: { fill: "rgba(0, 0, 0, 0.05)" },
+        }
+      : TOOLTIP_STYLE;
+    const gridStroke = (darkStroke: string) =>
+      isLightTheme ? "rgba(0, 0, 0, 0.15)" : darkStroke;
+
+    return {
+      axisColor,
+      axisFontWeight: 600,
+      titleColor: sharedTextColor,
+      legendColor: sharedTextColor,
+      descriptionColor: sharedTextColor,
+      tooltipStyle,
+      gridStroke,
+    };
+  }, [isLightTheme]);
+
   // Calculate analytics data
   const analytics = useMemo(() => {
     // Asset type distribution
@@ -115,6 +151,16 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
     return null;
   }
 
+  const {
+    axisColor,
+    axisFontWeight,
+    titleColor,
+    legendColor,
+    descriptionColor,
+    tooltipStyle,
+    gridStroke,
+  } = themeStyles;
+
   return (
     <div className="space-y-6 mb-6 animate-fade-in-up">
       {/* Summary Cards */}
@@ -149,8 +195,8 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
         {/* Asset Type Distribution */}
         <GlassCard glow hover gradient>
           <GlassCardHeader className="pb-3">
-            <GlassCardTitle className="text-base">Asset Type Distribution</GlassCardTitle>
-            <GlassCardDescription className="text-xs">Breakdown by asset type</GlassCardDescription>
+            <GlassCardTitle className="text-base" style={{ color: titleColor }}>Asset Type Distribution</GlassCardTitle>
+            <GlassCardDescription className="text-xs" style={{ color: descriptionColor }}>Breakdown by asset type</GlassCardDescription>
           </GlassCardHeader>
           <GlassCardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -213,7 +259,7 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip {...TOOLTIP_STYLE} />
+                <Tooltip {...tooltipStyle} />
               </PieChart>
             </ResponsiveContainer>
           </GlassCardContent>
@@ -222,8 +268,8 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
         {/* Status Distribution */}
         <GlassCard glow hover gradient>
           <GlassCardHeader className="pb-3">
-            <GlassCardTitle className="text-base">Asset Status</GlassCardTitle>
-            <GlassCardDescription className="text-xs">Current status of all assets</GlassCardDescription>
+            <GlassCardTitle className="text-base" style={{ color: titleColor }}>Asset Status</GlassCardTitle>
+            <GlassCardDescription className="text-xs" style={{ color: descriptionColor }}>Current status of all assets</GlassCardDescription>
           </GlassCardHeader>
           <GlassCardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -286,7 +332,7 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip {...TOOLTIP_STYLE} />
+                <Tooltip {...tooltipStyle} />
               </PieChart>
             </ResponsiveContainer>
           </GlassCardContent>
@@ -296,8 +342,8 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
         {analytics.categoryData.length > 0 && (
           <GlassCard glow hover gradient>
             <GlassCardHeader className="pb-3">
-              <GlassCardTitle className="text-base">Hardware Categories</GlassCardTitle>
-              <GlassCardDescription className="text-xs">Device types breakdown</GlassCardDescription>
+            <GlassCardTitle className="text-base" style={{ color: titleColor }}>Hardware Categories</GlassCardTitle>
+            <GlassCardDescription className="text-xs" style={{ color: descriptionColor }}>Device types breakdown</GlassCardDescription>
             </GlassCardHeader>
             <GlassCardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -315,25 +361,29 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
                       </feMerge>
                     </filter>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="rgba(96, 165, 250, 0.15)" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    opacity={0.1}
+                    stroke={gridStroke("rgba(96, 165, 250, 0.15)")}
+                  />
                   <XAxis 
                     dataKey="name" 
                     angle={-45} 
                     textAnchor="end" 
                     height={80}
                     fontSize={11}
-                    stroke="#E5E7EB"
-                    tick={{ fill: '#E5E7EB', fontWeight: 600 }}
+                    stroke={axisColor}
+                    tick={{ fill: axisColor, fontWeight: axisFontWeight }}
                     style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}
                   />
                   <YAxis 
                     fontSize={11} 
                     allowDecimals={false} 
-                    stroke="#E5E7EB"
-                    tick={{ fill: '#E5E7EB', fontWeight: 600 }}
+                    stroke={axisColor}
+                    tick={{ fill: axisColor, fontWeight: axisFontWeight }}
                     style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}
                   />
-                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Tooltip {...tooltipStyle} />
                   <Bar 
                     dataKey="value" 
                     fill="url(#cat-bar-gradient)" 
@@ -353,8 +403,8 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
         {analytics.vendorData.length > 0 && (
           <GlassCard glow hover gradient>
             <GlassCardHeader className="pb-3">
-              <GlassCardTitle className="text-base">Top Hardware Vendors</GlassCardTitle>
-              <GlassCardDescription className="text-xs">Distribution by manufacturer</GlassCardDescription>
+            <GlassCardTitle className="text-base" style={{ color: titleColor }}>Top Hardware Vendors</GlassCardTitle>
+            <GlassCardDescription className="text-xs" style={{ color: descriptionColor }}>Distribution by manufacturer</GlassCardDescription>
             </GlassCardHeader>
             <GlassCardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -365,25 +415,29 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
                       <stop offset="100%" stopColor="#6366F1" stopOpacity={0.9} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="rgba(59, 130, 246, 0.15)" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    opacity={0.1}
+                    stroke={gridStroke("rgba(59, 130, 246, 0.15)")}
+                  />
                   <XAxis 
                     dataKey="name" 
                     angle={-45} 
                     textAnchor="end" 
                     height={80}
                     fontSize={11}
-                    stroke="#E5E7EB"
-                    tick={{ fill: '#E5E7EB', fontWeight: 600 }}
+                    stroke={axisColor}
+                    tick={{ fill: axisColor, fontWeight: axisFontWeight }}
                     style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}
                   />
                   <YAxis 
                     fontSize={11} 
                     allowDecimals={false} 
-                    stroke="#E5E7EB"
-                    tick={{ fill: '#E5E7EB', fontWeight: 600 }}
+                    stroke={axisColor}
+                    tick={{ fill: axisColor, fontWeight: axisFontWeight }}
                     style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}
                   />
-                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Tooltip {...tooltipStyle} />
                   <Bar 
                     dataKey="value" 
                     fill="url(#hw-bar-gradient)" 
@@ -400,8 +454,8 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
         {analytics.softwareVendorData.length > 0 && (
           <GlassCard glow hover gradient>
             <GlassCardHeader className="pb-3">
-              <GlassCardTitle className="text-base">Top Software Vendors</GlassCardTitle>
-              <GlassCardDescription className="text-xs">Software licenses by vendor</GlassCardDescription>
+            <GlassCardTitle className="text-base" style={{ color: titleColor }}>Top Software Vendors</GlassCardTitle>
+            <GlassCardDescription className="text-xs" style={{ color: descriptionColor }}>Software licenses by vendor</GlassCardDescription>
             </GlassCardHeader>
             <GlassCardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -412,25 +466,29 @@ export function AssetAnalytics({ assets }: AssetAnalyticsProps) {
                       <stop offset="100%" stopColor="#A78BFA" stopOpacity={0.9} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="rgba(129, 140, 248, 0.15)" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    opacity={0.1}
+                    stroke={gridStroke("rgba(129, 140, 248, 0.15)")}
+                  />
                   <XAxis 
                     dataKey="name" 
                     angle={-45} 
                     textAnchor="end" 
                     height={80}
                     fontSize={11}
-                    stroke="#E5E7EB"
-                    tick={{ fill: '#E5E7EB', fontWeight: 600 }}
+                    stroke={axisColor}
+                    tick={{ fill: axisColor, fontWeight: axisFontWeight }}
                     style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}
                   />
                   <YAxis 
                     fontSize={11} 
                     allowDecimals={false} 
-                    stroke="#E5E7EB"
-                    tick={{ fill: '#E5E7EB', fontWeight: 600 }}
+                    stroke={axisColor}
+                    tick={{ fill: axisColor, fontWeight: axisFontWeight }}
                     style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}
                   />
-                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Tooltip {...tooltipStyle} />
                   <Bar 
                     dataKey="value" 
                     fill="url(#sw-bar-gradient)" 

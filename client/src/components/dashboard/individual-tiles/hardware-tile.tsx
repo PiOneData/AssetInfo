@@ -12,12 +12,12 @@ export function HardwareTile({ metrics, onNavigateToAssets }: HardwareTileProps)
 
   return (
     <GlassCard className="h-36" glow hover gradient>
-      <GlassCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-5 pt-4">
+      <GlassCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-5 pt-4 border-b-0">
         <div className="space-y-0 min-w-0 flex-1">
           <GlassCardTitle className="text-sm truncate">Hardware</GlassCardTitle>
           <p className="text-xs text-text-secondary">Devices</p>
         </div>
-        <div className="flex-shrink-0 p-2 rounded-lg bg-gradient-primary shadow-glow">
+        <div className="flex-shrink-0 p-2 rounded-lg bg-primary shadow-sm">
           <Monitor className="h-5 w-5 text-white" />
         </div>
       </GlassCardHeader>
@@ -30,7 +30,7 @@ export function HardwareTile({ metrics, onNavigateToAssets }: HardwareTileProps)
           size="sm" 
           onClick={() => onNavigateToAssets('Hardware')}
           data-testid="button-view-all-Hardware"
-          className="w-full text-xs h-7 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+          className="w-full text-xs h-7 rounded-lg"
         >
           View All
         </GradientButton>

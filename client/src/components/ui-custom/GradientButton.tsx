@@ -24,7 +24,7 @@ export function GradientButton({
     accent: 'bg-gradient-accent text-white hover:opacity-90',
     success: 'bg-gradient-success text-white hover:opacity-90',
     danger: 'bg-gradient-danger text-white hover:opacity-90',
-    ghost: 'bg-transparent border border-white/10 text-text-primary hover:bg-white/5',
+    ghost: 'bg-transparent border border-border text-text-primary hover:bg-surface-light/60',
   };
 
   const sizes = {
@@ -37,16 +37,14 @@ export function GradientButton({
     <button
       className={cn(
         // Base styles
-        'relative rounded-lg font-medium transition-all duration-300',
+        'relative rounded-lg font-medium transition-colors duration-200',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         // Variant styles
         variants[variant],
         // Size styles
         sizes[size],
         // Glow effect
-        glow && 'shadow-glow hover:shadow-glow-strong',
-        // Animation
-        'transform hover:scale-[1.02] active:scale-[0.98]',
+        glow && 'shadow-sm',
         className
       )}
       disabled={disabled || loading}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import {
   type ComplianceAssetSummary,
 } from "@/hooks/use-compliance";
 import { ComplianceAssetTable } from "@/components/compliance/asset-table";
+import { RemediationModal, RemediationContext } from "@/components/compliance/remediation-modal";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerClose } from "@/components/ui/drawer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DeviceSoftware } from "@/components/assets/DeviceSoftware";
@@ -20,6 +21,7 @@ import type { InsertAsset } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getRolePermissions } from "@/lib/permissions";
+import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";
 
 function extractIssueAssets(issues: any[] | undefined, key: string): ComplianceAssetSummary[] {
   if (!issues) return [];
@@ -49,9 +51,24 @@ export default function ComplianceLicensePage() {
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<any | null>(null);
   const [isAssetFormOpen, setIsAssetFormOpen] = useState(false);
+  const [remediationContext, setRemediationContext] = useState<RemediationContext | null>(null);
+  const [resolvedAssets, setResolvedAssets] = useState<Record<string, Set<string>>>({});
 
-  const unlicensedAssets = extractIssueAssets(data?.issues, "unlicensedSoftware");
-  const expiredWarrantyAssets = extractIssueAssets(data?.issues, "expiredWarranty");
+  const issues = data?.issues || [];
+
+  const unlicensedAssets = useMemo(() => {
+    const base = extractIssueAssets(data?.issues, "unlicensedSoftware");
+    const dismissed = resolvedAssets.unlicensedSoftware;
+    if (!dismissed) return base;
+    return base.filter((asset) => !dismissed.has(asset.id));
+  }, [data, resolvedAssets]);
+
+  const expiredWarrantyAssets = useMemo(() => {
+    const base = extractIssueAssets(data?.issues, "expiredWarranty");
+    const dismissed = resolvedAssets.expiredWarranty;
+    if (!dismissed) return base;
+    return base.filter((asset) => !dismissed.has(asset.id));
+  }, [data, resolvedAssets]);
 
   const ensurePermission = (allowed: boolean, message: string) => {
     if (!allowed) {
@@ -92,6 +109,55 @@ export default function ComplianceLicensePage() {
   const handleDeleteAsset = (assetId: string) => {
     if (!ensurePermission(permissions.canDeleteAssets, "You cannot delete assets.")) return;
     deleteAssetMutation.mutate(assetId);
+  };
+
+  const gatherIssueDetails = useCallback(
+    (assetId: string, fallbackKey: string, fallbackLabel: string) => {
+      const keys = new Set<string>();
+      const labels: string[] = [];
+      issues.forEach((issue) => {
+        if (issue.assets?.some((asset) => asset.id === assetId)) {
+          keys.add(issue.key);
+          labels.push(issue.label);
+        }
+      });
+      if (!keys.size) {
+        keys.add(fallbackKey);
+        labels.push(fallbackLabel);
+      }
+      return { keys: Array.from(keys), labels: Array.from(new Set(labels)) };
+    },
+    [issues]
+  );
+
+  const handleSelectAsset = (params: { asset: ComplianceAssetSummary; record: any; issueKey?: string; issueContext?: any }) => {
+    if (!ensurePermission(permissions.canManageAssets, "You cannot remediate assets.")) return;
+    if (!params.issueKey) return;
+    const asset = assetLookup.get(params.asset.id);
+    const details = gatherIssueDetails(params.asset.id, params.issueKey, params.issueContext?.label || "");
+    setRemediationContext({
+      issueKey: params.issueKey,
+      issueLabel: params.issueContext?.label,
+      issueKeys: details.keys,
+      issueLabels: details.labels,
+      primaryIssueKey: details.keys[0],
+      primaryLabel: details.labels[0] || params.issueContext?.label,
+      summary: params.asset,
+      asset,
+    });
+  };
+
+  const handleResolveAsset = (issueKeys: string[], assetId: string) => {
+    if (!issueKeys.length) return;
+    setResolvedAssets((prev) => {
+      const next = { ...prev };
+      issueKeys.forEach((key) => {
+        const collection = new Set(next[key] || []);
+        collection.add(assetId);
+        next[key] = collection;
+      });
+      return next;
+    });
   };
 
   if (isLoading) {
@@ -137,6 +203,9 @@ export default function ComplianceLicensePage() {
                   deletingAssetId={deletingAssetId}
                   onNavigate={navigate}
                   emptyMessage="No unlicensed software detected"
+                  issueKey="unlicensedSoftware"
+                  issueContext={{ label: "Unlicensed Software" }}
+                  onSelectAsset={handleSelectAsset}
                 />
               </CardContent>
             </Card>
@@ -158,6 +227,9 @@ export default function ComplianceLicensePage() {
                   deletingAssetId={deletingAssetId}
                   onNavigate={navigate}
                   emptyMessage="No expired warranties found"
+                  issueKey="expiredWarranty"
+                  issueContext={{ label: "Expired Warranty" }}
+                  onSelectAsset={handleSelectAsset}
                 />
               </CardContent>
             </Card>
@@ -238,6 +310,37 @@ export default function ComplianceLicensePage() {
           isLoading={updateAssetMutation.isPending}
         />
       )}
+      <FloatingAIAssistant />
+      <RemediationModal
+        open={Boolean(remediationContext)}
+        onOpenChange={(open) => {
+          if (!open) setRemediationContext(null);
+        }}
+        context={remediationContext}
+        isSubmitting={updateAssetMutation.isPending}
+        onSubmit={async (payload) => {
+          if (!remediationContext?.summary?.id) return;
+          const keysToResolve =
+            remediationContext.issueKeys && remediationContext.issueKeys.length
+              ? remediationContext.issueKeys
+              : remediationContext.issueKey
+              ? [remediationContext.issueKey]
+              : [];
+          await new Promise<void>((resolve, reject) => {
+            updateAssetMutation.mutate(
+              { id: remediationContext.summary.id, data: payload },
+              {
+                onSuccess: () => {
+                  handleResolveAsset(keysToResolve, remediationContext.summary.id);
+                  setRemediationContext(null);
+                  resolve();
+                },
+                onError: (error) => reject(error),
+              }
+            );
+          });
+        }}
+      />
     </div>
   );
 }

@@ -12,12 +12,12 @@ export function PeripheralsTile({ metrics, onNavigateToAssets }: PeripheralsTile
 
   return (
     <GlassCard className="h-36" glow hover gradient>
-      <GlassCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-5 pt-4">
+      <GlassCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-5 pt-4 border-b-0">
         <div className="space-y-0 min-w-0 flex-1">
           <GlassCardTitle className="text-sm truncate">Peripherals</GlassCardTitle>
           <p className="text-xs text-text-secondary">Accessories</p>
         </div>
-        <div className="flex-shrink-0 p-2 rounded-lg bg-gradient-success shadow-glow">
+        <div className="flex-shrink-0 p-2 rounded-lg bg-[color:var(--color-success)] shadow-sm">
           <Printer className="h-5 w-5 text-white" />
         </div>
       </GlassCardHeader>
@@ -30,7 +30,7 @@ export function PeripheralsTile({ metrics, onNavigateToAssets }: PeripheralsTile
           size="sm" 
           onClick={() => onNavigateToAssets('Peripherals')}
           data-testid="button-view-all-Peripherals"
-          className="w-full text-xs h-7 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+          className="w-full text-xs h-7 rounded-lg"
         >
           View All
         </GradientButton>
