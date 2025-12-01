@@ -85,7 +85,7 @@ function buildHighRiskSummary(asset: HighRiskAsset): ComplianceAssetSummary {
 }
 
 export default function ComplianceOverviewPage() {
-  const { data, isLoading, isError, error } = useComplianceOverview();
+  const { data, isLoading } = useComplianceOverview();
   const { data: allAssets = [] } = useTenantAssets();
   const assetLookup = useMemo(() => {
     const map = new Map<string, any>();
@@ -300,12 +300,6 @@ export default function ComplianceOverviewPage() {
         />
 
         <div className="max-w-6xl mx-auto px-6 py-6 space-y-8">
-          {isError && (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 text-destructive px-4 py-3 text-sm">
-              {(error as Error)?.message || "Unable to load compliance data"}
-            </div>
-          )}
-
           <section>
             <Card className="bg-card border">
               <CardHeader>

@@ -57,16 +57,36 @@ export interface ComplianceOverviewPayload {
   highRiskAssetsList?: HighRiskAsset[];
 }
 
+const EMPTY_COMPLIANCE_OVERVIEW: ComplianceOverviewPayload = {
+  complianceScore: Number.NaN,
+  rating: undefined,
+  ratingDescription: undefined,
+  highRiskAssets: 0,
+  complianceIssues: 0,
+  unlicensedSoftware: 0,
+  expiredWarranties: 0,
+  weightedBreakdown: [],
+  issues: [],
+  highRiskAssetsList: [],
+};
+
 export function useComplianceOverview() {
   return useQuery<ComplianceOverviewPayload>({
     queryKey: ["/api/compliance/overview"],
     queryFn: async () => {
       const response = await authenticatedRequest("GET", "/api/compliance/overview");
       if (!response.ok) {
+        if (response.status === 404 || response.status === 500) {
+          return EMPTY_COMPLIANCE_OVERVIEW;
+        }
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.message || "Unable to load compliance overview");
       }
-      return response.json();
+      const payload = await response.json().catch(() => ({}));
+      return {
+        ...EMPTY_COMPLIANCE_OVERVIEW,
+        ...payload,
+      };
     },
     staleTime: 60 * 1000,
   });

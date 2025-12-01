@@ -13,16 +13,31 @@ interface ComplianceOverviewData {
   expiredWarranties: number;
 }
 
+const EMPTY_OVERVIEW: ComplianceOverviewData = {
+  complianceScore: Number.NaN,
+  highRiskAssets: 0,
+  complianceIssues: 0,
+  unlicensedSoftware: 0,
+  expiredWarranties: 0,
+};
+
 function useComplianceOverview() {
   return useQuery<ComplianceOverviewData>({
     queryKey: ["/api/compliance/overview"],
     queryFn: async () => {
       const response = await authenticatedRequest("GET", "/api/compliance/overview");
       if (!response.ok) {
+        if (response.status === 404 || response.status === 500) {
+          return EMPTY_OVERVIEW;
+        }
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.message || "Unable to load compliance overview");
       }
-      return response.json();
+      const payload = await response.json().catch(() => ({}));
+      return {
+        ...EMPTY_OVERVIEW,
+        ...payload,
+      };
     },
     staleTime: 60 * 1000,
   });
@@ -35,7 +50,7 @@ function getScoreColor(score: number) {
 }
 
 export function DashboardComplianceSection() {
-  const { data, isLoading, isError, error } = useComplianceOverview();
+  const { data, isLoading } = useComplianceOverview();
   const [, navigate] = useLocation();
 
   const formattedScore = useMemo(() => {
@@ -51,12 +66,6 @@ export function DashboardComplianceSection() {
         <h2 className="text-lg font-semibold mb-1 gradient-text">Compliance & Risk Overview</h2>
         <p className="text-xs text-muted-foreground">Real-time compliance posture and risk insights</p>
       </div>
-
-      {isError && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 text-destructive px-4 py-3 text-sm mb-4">
-          {(error as Error)?.message || "Unable to load compliance data"}
-        </div>
-      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
         <Card className="bg-card border rounded-xl px-5 py-6 flex flex-col gap-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/40 cursor-pointer" onClick={() => navigate("/dashboard/compliance/score")}>

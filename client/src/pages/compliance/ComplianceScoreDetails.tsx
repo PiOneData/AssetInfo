@@ -57,14 +57,53 @@ async function fetchScoreDetails(path: string) {
 }
 
 function useComplianceScoreDetails() {
+  const createEmptyScoreDetails = (): ComplianceScoreDetailsResponse => ({
+    score: Number.NaN,
+    target: 85,
+    breakdown: {
+      assets_with_owner: { current: 0, total: 0 },
+      assets_with_location: { current: 0, total: 0 },
+      valid_warranty: { current: 0, total: 0 },
+      licensed_software: { current: 0, total: 0 },
+      up_to_date_os: { current: 0, total: 0 },
+      security_patches: { current: 0, total: 0 },
+      no_duplicates: { current: 0, total: 0 },
+      idle_assets: { current: 0, total: 0 },
+    },
+    weightedBreakdown: [],
+    rating: undefined,
+    ratingDescription: undefined,
+  });
+
+  const mergeWithDefaults = (data?: ComplianceScoreDetailsResponse) => {
+    const base = createEmptyScoreDetails();
+    if (!data) return base;
+    return {
+      ...base,
+      ...data,
+      breakdown: {
+        ...base.breakdown,
+        ...(data.breakdown || {}),
+      },
+      weightedBreakdown: data.weightedBreakdown ?? base.weightedBreakdown,
+    };
+  };
+
   return useQuery<ComplianceScoreDetailsResponse>({
     queryKey: ["/api/compliance/score-details"],
     queryFn: async () => {
       try {
-        return await fetchScoreDetails("/api/compliance/score-details");
+        const primary = await fetchScoreDetails("/api/compliance/score-details");
+        return mergeWithDefaults(primary);
       } catch (primaryError) {
         console.warn("Primary compliance score endpoint failed, attempting fallback /api/compliance/score", primaryError);
-        return fetchScoreDetails("/api/compliance/score");
+        try {
+          const fallback = await fetchScoreDetails("/api/compliance/score");
+          return mergeWithDefaults(fallback);
+        } catch (secondaryError) {
+          console.warn("Fallback compliance score endpoint failed", secondaryError);
+          return mergeWithDefaults();
+        }
       }
     },
     staleTime: 60 * 1000,
@@ -167,7 +206,7 @@ function breakdownBadgeColor(percent: number) {
 }
 
 export default function ComplianceScoreDetails() {
-  const { data, isLoading, isError, error } = useComplianceScoreDetails();
+  const { data, isLoading } = useComplianceScoreDetails();
 
   const breakdownValues = useMemo(() => {
     const weightedMap = new Map<BreakdownKey, WeightedBreakdownEntry>();
@@ -190,12 +229,6 @@ export default function ComplianceScoreDetails() {
         />
 
         <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
-
-          {isError && (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 text-destructive px-4 py-3 text-sm">
-              {(error as Error)?.message || "Unable to load compliance score details"}
-            </div>
-          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="bg-card border rounded-xl p-6 flex flex-col justify-between">

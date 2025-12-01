@@ -29,7 +29,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { authenticatedRequest } from "@/lib/auth";
-import { 
+import {
   Users as UsersIcon, 
   UserPlus, 
   Search, 
@@ -43,7 +43,6 @@ import {
   Edit,
   Trash2,
   X,
-  Upload,
   Download,
   FileSpreadsheet
 } from "lucide-react";
@@ -401,15 +400,6 @@ export default function Users() {
               </div>
               
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsBulkUploadOpen(true)}
-                  data-testid="button-bulk-upload-users"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Bulk Upload
-                </Button>
-                
                 <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
                   <DialogTrigger asChild>
                     <Button data-testid="button-invite-user">
