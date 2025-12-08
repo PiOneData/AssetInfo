@@ -1,6 +1,10 @@
 /**
  * Segregation of Duties (SoD) API Routes (Phase 6.3)
  * SoD rule management and violation detection
+ * @swagger
+ * tags:
+ *   name: SoD
+ *   description: Segregation of Duties rules and violation detection
  */
 
 import { Router } from "express";
@@ -15,8 +19,40 @@ const router = Router();
 // ============================================================================
 
 /**
- * GET /api/sod/rules
- * Get all SoD rules (with optional filters)
+ * @swagger
+ * /api/sod/rules:
+ *   get:
+ *     tags: [SoD]
+ *     summary: Get all SoD rules
+ *     description: Retrieve SoD rules with optional filtering by active status or severity
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: string
+ *           enum: ['true', 'false']
+ *         description: Filter by active status
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [low, medium, high, critical]
+ *         description: Filter by severity level
+ *     responses:
+ *       200:
+ *         description: List of SoD rules
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/SodRule'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/rules", async (req: Request, res: Response) => {
   try {
@@ -40,8 +76,35 @@ router.get("/rules", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/sod/rules/:id
- * Get a specific SoD rule
+ * @swagger
+ * /api/sod/rules/{id}:
+ *   get:
+ *     tags: [SoD]
+ *     summary: Get a specific SoD rule
+ *     description: Retrieve details of a single SoD rule by ID
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD rule ID
+ *     responses:
+ *       200:
+ *         description: SoD rule details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SodRule'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Server error
  */
 router.get("/rules/:id", async (req: Request, res: Response) => {
   try {
@@ -64,8 +127,61 @@ router.get("/rules/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/sod/rules
- * Create a new SoD rule
+ * @swagger
+ * /api/sod/rules:
+ *   post:
+ *     tags: [SoD]
+ *     summary: Create a new SoD rule
+ *     description: Create a new Segregation of Duties rule defining conflicting applications
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - severity
+ *               - appId1
+ *               - appId2
+ *               - rationale
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               severity:
+ *                 type: string
+ *                 enum: [low, medium, high, critical]
+ *               appId1:
+ *                 type: string
+ *                 format: uuid
+ *               appId2:
+ *                 type: string
+ *                 format: uuid
+ *               rationale:
+ *                 type: string
+ *               complianceFramework:
+ *                 type: string
+ *                 enum: [SOX, GDPR, HIPAA, PCI-DSS, Custom]
+ *               exemptedUsers:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *     responses:
+ *       201:
+ *         description: SoD rule created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SodRule'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/rules", async (req: Request, res: Response) => {
   try {
@@ -87,8 +203,57 @@ router.post("/rules", async (req: Request, res: Response) => {
 });
 
 /**
- * PATCH /api/sod/rules/:id
- * Update an SoD rule
+ * @swagger
+ * /api/sod/rules/{id}:
+ *   patch:
+ *     tags: [SoD]
+ *     summary: Update an SoD rule
+ *     description: Update an existing Segregation of Duties rule
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD rule ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               severity:
+ *                 type: string
+ *                 enum: [low, medium, high, critical]
+ *               rationale:
+ *                 type: string
+ *               complianceFramework:
+ *                 type: string
+ *                 enum: [SOX, GDPR, HIPAA, PCI-DSS, Custom]
+ *               exemptedUsers:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *     responses:
+ *       200:
+ *         description: SoD rule updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SodRule'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.patch("/rules/:id", async (req: Request, res: Response) => {
   try {
@@ -110,8 +275,29 @@ router.patch("/rules/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/sod/rules/:id
- * Delete an SoD rule
+ * @swagger
+ * /api/sod/rules/{id}:
+ *   delete:
+ *     tags: [SoD]
+ *     summary: Delete an SoD rule
+ *     description: Delete a Segregation of Duties rule
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD rule ID
+ *     responses:
+ *       200:
+ *         description: SoD rule deleted successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.delete("/rules/:id", async (req: Request, res: Response) => {
   try {
@@ -133,8 +319,44 @@ router.delete("/rules/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/sod/rules/:id/toggle
- * Toggle SoD rule active status
+ * @swagger
+ * /api/sod/rules/{id}/toggle:
+ *   post:
+ *     tags: [SoD]
+ *     summary: Toggle SoD rule active status
+ *     description: Enable or disable an SoD rule
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD rule ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - isActive
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: SoD rule toggled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SodRule'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/rules/:id/toggle", async (req: Request, res: Response) => {
   try {
@@ -162,8 +384,46 @@ router.post("/rules/:id/toggle", async (req: Request, res: Response) => {
 // ============================================================================
 
 /**
- * GET /api/sod/violations
- * Get all SoD violations (with optional filters)
+ * @swagger
+ * /api/sod/violations:
+ *   get:
+ *     tags: [SoD]
+ *     summary: Get all SoD violations
+ *     description: Retrieve SoD violations with optional filtering by user, status, or severity
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter by user ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [open, investigating, remediated, exempted]
+ *         description: Filter by violation status
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [low, medium, high, critical]
+ *         description: Filter by severity level
+ *     responses:
+ *       200:
+ *         description: List of SoD violations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/SodViolation'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/violations", async (req: Request, res: Response) => {
   try {
@@ -188,8 +448,35 @@ router.get("/violations", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/sod/violations/:id
- * Get a specific SoD violation
+ * @swagger
+ * /api/sod/violations/{id}:
+ *   get:
+ *     tags: [SoD]
+ *     summary: Get a specific SoD violation
+ *     description: Retrieve details of a single SoD violation by ID
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD violation ID
+ *     responses:
+ *       200:
+ *         description: SoD violation details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SodViolation'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Server error
  */
 router.get("/violations/:id", async (req: Request, res: Response) => {
   try {
@@ -212,8 +499,35 @@ router.get("/violations/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/sod/violations/user/:userId
- * Get violations for a specific user
+ * @swagger
+ * /api/sod/violations/user/{userId}:
+ *   get:
+ *     tags: [SoD]
+ *     summary: Get violations for a specific user
+ *     description: Retrieve all SoD violations associated with a specific user
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: List of user violations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/SodViolation'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/violations/user/:userId", async (req: Request, res: Response) => {
   try {
@@ -233,8 +547,45 @@ router.get("/violations/user/:userId", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/sod/violations/:id/remediate
- * Remediate a violation (revoke one of the conflicting accesses)
+ * @swagger
+ * /api/sod/violations/{id}/remediate:
+ *   post:
+ *     tags: [SoD]
+ *     summary: Remediate a violation
+ *     description: Remediate an SoD violation by revoking one of the conflicting accesses
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD violation ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - revokeAppId
+ *             properties:
+ *               revokeAppId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID of the application to revoke access from
+ *               notes:
+ *                 type: string
+ *                 description: Remediation notes
+ *     responses:
+ *       200:
+ *         description: Violation remediated successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/violations/:id/remediate", async (req: Request, res: Response) => {
   try {
@@ -259,8 +610,41 @@ router.post("/violations/:id/remediate", async (req: Request, res: Response) => 
 });
 
 /**
- * POST /api/sod/violations/:id/accept
- * Accept a violation with justification
+ * @swagger
+ * /api/sod/violations/{id}/accept:
+ *   post:
+ *     tags: [SoD]
+ *     summary: Accept a violation with justification
+ *     description: Mark an SoD violation as exempted/accepted with a business justification
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: SoD violation ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - justification
+ *             properties:
+ *               justification:
+ *                 type: string
+ *                 description: Business justification for accepting the violation
+ *     responses:
+ *       200:
+ *         description: Violation accepted successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/violations/:id/accept", async (req: Request, res: Response) => {
   try {
@@ -289,8 +673,50 @@ router.post("/violations/:id/accept", async (req: Request, res: Response) => {
 // ============================================================================
 
 /**
- * POST /api/sod/check
- * Check if a user-app combination would violate any SoD rules
+ * @swagger
+ * /api/sod/check:
+ *   post:
+ *     tags: [SoD]
+ *     summary: Check for SoD violations
+ *     description: Check if granting access to a user for a specific application would violate any SoD rules
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - appId
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: User ID to check
+ *               appId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Application ID to check
+ *     responses:
+ *       200:
+ *         description: SoD check result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 violations:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 hasViolations:
+ *                   type: boolean
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/check", async (req: Request, res: Response) => {
   try {
@@ -312,8 +738,43 @@ router.post("/check", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/sod/scan
- * Scan all users for SoD violations
+ * @swagger
+ * /api/sod/scan:
+ *   post:
+ *     tags: [SoD]
+ *     summary: Scan for SoD violations
+ *     description: Scan all users (or for a specific rule) to detect SoD violations
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ruleId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional specific rule ID to scan for (scans all rules if omitted)
+ *     responses:
+ *       200:
+ *         description: Scan completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 violationsFound:
+ *                   type: integer
+ *                 scannedRules:
+ *                   type: integer
+ *                 scannedUsers:
+ *                   type: integer
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/scan", async (req: Request, res: Response) => {
   try {
@@ -335,8 +796,54 @@ router.post("/scan", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/sod/compliance-report
- * Get compliance report
+ * @swagger
+ * /api/sod/compliance-report:
+ *   get:
+ *     tags: [SoD]
+ *     summary: Get compliance report
+ *     description: Generate a comprehensive SoD compliance report with optional framework filtering
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: framework
+ *         schema:
+ *           type: string
+ *           enum: [SOX, GDPR, HIPAA, PCI-DSS, Custom]
+ *         description: Filter by specific compliance framework
+ *     responses:
+ *       200:
+ *         description: Compliance report generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 framework:
+ *                   type: string
+ *                 totalRules:
+ *                   type: integer
+ *                 activeRules:
+ *                   type: integer
+ *                 totalViolations:
+ *                   type: integer
+ *                 openViolations:
+ *                   type: integer
+ *                 remediatedViolations:
+ *                   type: integer
+ *                 exemptedViolations:
+ *                   type: integer
+ *                 violationsBySeverity:
+ *                   type: object
+ *                 complianceScore:
+ *                   type: number
+ *                 generatedAt:
+ *                   type: string
+ *                   format: date-time
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/compliance-report", async (req: Request, res: Response) => {
   try {

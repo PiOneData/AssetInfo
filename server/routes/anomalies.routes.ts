@@ -1,6 +1,10 @@
 /**
  * Anomaly Detection API Routes (Phase 6.5)
  * Behavioral anomaly detection and investigation
+ * @swagger
+ * tags:
+ *   name: Anomaly Detection
+ *   description: Behavioral anomaly detection and investigation
  */
 
 import { Router } from "express";
@@ -11,8 +15,46 @@ import type { Request, Response } from "express";
 const router = Router();
 
 /**
- * GET /api/anomalies
- * Get all anomaly detections (with optional filters)
+ * @swagger
+ * /api/anomalies:
+ *   get:
+ *     tags: [Anomaly Detection]
+ *     summary: Get all anomaly detections
+ *     description: Retrieve anomaly detections with optional filtering by user, status, or severity
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter by user ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [open, investigating, resolved, false_positive]
+ *         description: Filter by anomaly status
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [low, medium, high, critical]
+ *         description: Filter by severity level
+ *     responses:
+ *       200:
+ *         description: List of anomaly detections
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/AnomalyDetection'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/", async (req: Request, res: Response) => {
   try {
@@ -37,8 +79,35 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/anomalies/:id
- * Get a specific anomaly detection
+ * @swagger
+ * /api/anomalies/{id}:
+ *   get:
+ *     tags: [Anomaly Detection]
+ *     summary: Get a specific anomaly detection
+ *     description: Retrieve details of a single anomaly detection by ID
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Anomaly detection ID
+ *     responses:
+ *       200:
+ *         description: Anomaly detection details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AnomalyDetection'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         description: Server error
  */
 router.get("/:id", async (req: Request, res: Response) => {
   try {
@@ -61,8 +130,35 @@ router.get("/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/anomalies/user/:userId
- * Get anomalies for a specific user
+ * @swagger
+ * /api/anomalies/user/{userId}:
+ *   get:
+ *     tags: [Anomaly Detection]
+ *     summary: Get anomalies for a specific user
+ *     description: Retrieve all anomaly detections associated with a specific user
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: List of user anomalies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/AnomalyDetection'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/user/:userId", async (req: Request, res: Response) => {
   try {
@@ -82,8 +178,34 @@ router.get("/user/:userId", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/anomalies/open/all
- * Get all open anomalies
+ * @swagger
+ * /api/anomalies/open/all:
+ *   get:
+ *     tags: [Anomaly Detection]
+ *     summary: Get all open anomalies
+ *     description: Retrieve all open anomaly detections with optional severity filtering
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [low, medium, high, critical]
+ *         description: Filter by severity level
+ *     responses:
+ *       200:
+ *         description: List of open anomalies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/AnomalyDetection'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/open/all", async (req: Request, res: Response) => {
   try {
@@ -105,8 +227,53 @@ router.get("/open/all", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/anomalies/analyze
- * Analyze a user activity event for anomalies
+ * @swagger
+ * /api/anomalies/analyze:
+ *   post:
+ *     tags: [Anomaly Detection]
+ *     summary: Analyze a user activity event
+ *     description: Analyze a user activity event for anomalous behavior patterns
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - eventType
+ *               - eventData
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: User ID who performed the activity
+ *               eventType:
+ *                 type: string
+ *                 description: Type of event (login, access, data_export, etc.)
+ *               eventData:
+ *                 type: object
+ *                 description: Event-specific data for analysis
+ *               timestamp:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Event timestamp
+ *     responses:
+ *       200:
+ *         description: Event analyzed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/analyze", async (req: Request, res: Response) => {
   try {
@@ -128,8 +295,46 @@ router.post("/analyze", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/anomalies/:id/investigate
- * Start investigating an anomaly
+ * @swagger
+ * /api/anomalies/{id}/investigate:
+ *   post:
+ *     tags: [Anomaly Detection]
+ *     summary: Start investigating an anomaly
+ *     description: Mark an anomaly as under investigation and add investigation notes
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Anomaly detection ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *                 description: Investigation notes or initial findings
+ *     responses:
+ *       200:
+ *         description: Investigation started successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/:id/investigate", async (req: Request, res: Response) => {
   try {
@@ -154,8 +359,51 @@ router.post("/:id/investigate", async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/anomalies/:id/resolve
- * Resolve an anomaly (confirmed or false positive)
+ * @swagger
+ * /api/anomalies/{id}/resolve:
+ *   post:
+ *     tags: [Anomaly Detection]
+ *     summary: Resolve an anomaly
+ *     description: Resolve an anomaly and mark it as confirmed threat or false positive
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Anomaly detection ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - isFalsePositive
+ *             properties:
+ *               isFalsePositive:
+ *                 type: boolean
+ *                 description: Whether the anomaly is a false positive or confirmed threat
+ *               notes:
+ *                 type: string
+ *                 description: Resolution notes or findings
+ *     responses:
+ *       200:
+ *         description: Anomaly resolved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.post("/:id/resolve", async (req: Request, res: Response) => {
   try {
@@ -180,8 +428,65 @@ router.post("/:id/resolve", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/anomalies/statistics/:days
- * Get anomaly statistics for the last N days
+ * @swagger
+ * /api/anomalies/statistics/{days}:
+ *   get:
+ *     tags: [Anomaly Detection]
+ *     summary: Get anomaly statistics
+ *     description: Retrieve anomaly detection statistics for the last N days
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: days
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 365
+ *           default: 30
+ *         description: Number of days to retrieve statistics for
+ *     responses:
+ *       200:
+ *         description: Anomaly statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalAnomalies:
+ *                   type: integer
+ *                   description: Total number of anomalies detected
+ *                 bySeverity:
+ *                   type: object
+ *                   properties:
+ *                     low:
+ *                       type: integer
+ *                     medium:
+ *                       type: integer
+ *                     high:
+ *                       type: integer
+ *                     critical:
+ *                       type: integer
+ *                 byStatus:
+ *                   type: object
+ *                   properties:
+ *                     open:
+ *                       type: integer
+ *                     investigating:
+ *                       type: integer
+ *                     resolved:
+ *                       type: integer
+ *                     false_positive:
+ *                       type: integer
+ *                 falsePositiveRate:
+ *                   type: number
+ *                   format: float
+ *                   description: Percentage of anomalies marked as false positive
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Server error
  */
 router.get("/statistics/:days", async (req: Request, res: Response) => {
   try {
