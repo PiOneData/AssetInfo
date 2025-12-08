@@ -1,7 +1,7 @@
-import { 
-  type User, 
-  type InsertUser, 
-  type Tenant, 
+import {
+  type User,
+  type InsertUser,
+  type Tenant,
   type InsertTenant,
   type Asset,
   type InsertAsset,
@@ -38,6 +38,21 @@ import {
   type EnrollmentToken,
   type InsertEnrollmentToken,
   type CreateEnrollmentToken,
+  // SaaS Governance types (Phase 0)
+  type SaasApp,
+  type InsertSaasApp,
+  type SaasContract,
+  type InsertSaasContract,
+  type UserAppAccess,
+  type InsertUserAppAccess,
+  type OauthToken,
+  type InsertOauthToken,
+  type IdentityProvider,
+  type InsertIdentityProvider,
+  type SaasInvoice,
+  type InsertSaasInvoice,
+  type GovernancePolicy,
+  type InsertGovernancePolicy,
   users,
   tenants,
   assets,
@@ -55,7 +70,15 @@ import {
   ticketComments,
   ticketActivities,
   enrollmentTokens,
-  enrollmentSessions
+  enrollmentSessions,
+  // SaaS Governance tables (Phase 0)
+  saasApps,
+  saasContracts,
+  userAppAccess,
+  oauthTokens,
+  identityProviders,
+  saasInvoices,
+  governancePolicies
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword } from "./services/auth";
@@ -193,9 +216,72 @@ export interface IStorage {
   
   // Dashboard Metrics
   getDashboardMetrics(tenantId: string): Promise<any>;
-  
+
   // Global Search
   performGlobalSearch(tenantId: string, query: string, searchType?: string, userRole?: string, limit?: number): Promise<any>;
+
+  // ============================================================================
+  // SaaS Governance (Phase 0)
+  // ============================================================================
+
+  // SaaS Apps
+  getSaasApps(tenantId: string, filters?: {approvalStatus?: string; category?: string; search?: string}): Promise<SaasApp[]>;
+  getSaasApp(id: string, tenantId: string): Promise<SaasApp | undefined>;
+  createSaasApp(app: InsertSaasApp): Promise<SaasApp>;
+  updateSaasApp(id: string, tenantId: string, app: Partial<InsertSaasApp>): Promise<SaasApp | undefined>;
+  deleteSaasApp(id: string, tenantId: string): Promise<boolean>;
+  updateSaasAppApprovalStatus(id: string, tenantId: string, status: string): Promise<SaasApp | undefined>;
+  getSaasAppUsers(appId: string, tenantId: string): Promise<UserAppAccess[]>;
+  getSaasAppStats(tenantId: string): Promise<any>;
+
+  // SaaS Contracts
+  getSaasContracts(tenantId: string, filters?: {status?: string; appId?: string}): Promise<SaasContract[]>;
+  getSaasContract(id: string, tenantId: string): Promise<SaasContract | undefined>;
+  createSaasContract(contract: InsertSaasContract): Promise<SaasContract>;
+  updateSaasContract(id: string, tenantId: string, contract: Partial<InsertSaasContract>): Promise<SaasContract | undefined>;
+  deleteSaasContract(id: string, tenantId: string): Promise<boolean>;
+  getUpcomingRenewals(tenantId: string, days: number): Promise<SaasContract[]>;
+  updateRenewalAlerted(id: string, tenantId: string): Promise<SaasContract | undefined>;
+
+  // User App Access
+  getUserAppAccesses(tenantId: string, filters?: {userId?: string; appId?: string; status?: string}): Promise<UserAppAccess[]>;
+  getUserAppAccess(id: string, tenantId: string): Promise<UserAppAccess | undefined>;
+  createUserAppAccess(access: InsertUserAppAccess): Promise<UserAppAccess>;
+  updateUserAppAccess(id: string, tenantId: string, access: Partial<InsertUserAppAccess>): Promise<UserAppAccess | undefined>;
+  deleteUserAppAccess(id: string, tenantId: string): Promise<boolean>;
+  revokeUserAppAccess(id: string, tenantId: string, revokedBy: string): Promise<UserAppAccess | undefined>;
+
+  // OAuth Tokens
+  getOauthTokens(tenantId: string, filters?: {userId?: string; appId?: string; status?: string; riskLevel?: string}): Promise<OauthToken[]>;
+  getOauthToken(id: string, tenantId: string): Promise<OauthToken | undefined>;
+  createOauthToken(token: InsertOauthToken): Promise<OauthToken>;
+  updateOauthToken(id: string, tenantId: string, token: Partial<InsertOauthToken>): Promise<OauthToken | undefined>;
+  deleteOauthToken(id: string, tenantId: string): Promise<boolean>;
+  revokeOauthToken(id: string, tenantId: string, revokedBy: string, reason: string): Promise<OauthToken | undefined>;
+
+  // Identity Providers
+  getIdentityProviders(tenantId: string): Promise<IdentityProvider[]>;
+  getIdentityProvider(id: string, tenantId: string): Promise<IdentityProvider | undefined>;
+  getIdentityProviderByType(type: string, tenantId: string): Promise<IdentityProvider | undefined>;
+  createIdentityProvider(provider: InsertIdentityProvider): Promise<IdentityProvider>;
+  updateIdentityProvider(id: string, tenantId: string, provider: Partial<InsertIdentityProvider>): Promise<IdentityProvider | undefined>;
+  deleteIdentityProvider(id: string, tenantId: string): Promise<boolean>;
+  updateIdpSyncStatus(id: string, tenantId: string, status: string, error?: string): Promise<IdentityProvider | undefined>;
+
+  // SaaS Invoices
+  getSaasInvoices(tenantId: string, filters?: {status?: string; appId?: string}): Promise<SaasInvoice[]>;
+  getSaasInvoice(id: string, tenantId: string): Promise<SaasInvoice | undefined>;
+  createSaasInvoice(invoice: InsertSaasInvoice): Promise<SaasInvoice>;
+  updateSaasInvoice(id: string, tenantId: string, invoice: Partial<InsertSaasInvoice>): Promise<SaasInvoice | undefined>;
+  deleteSaasInvoice(id: string, tenantId: string): Promise<boolean>;
+
+  // Governance Policies
+  getGovernancePolicies(tenantId: string, filters?: {policyType?: string; enabled?: boolean}): Promise<GovernancePolicy[]>;
+  getGovernancePolicy(id: string, tenantId: string): Promise<GovernancePolicy | undefined>;
+  createGovernancePolicy(policy: InsertGovernancePolicy): Promise<GovernancePolicy>;
+  updateGovernancePolicy(id: string, tenantId: string, policy: Partial<InsertGovernancePolicy>): Promise<GovernancePolicy | undefined>;
+  deleteGovernancePolicy(id: string, tenantId: string): Promise<boolean>;
+  toggleGovernancePolicy(id: string, tenantId: string, enabled: boolean): Promise<GovernancePolicy | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2311,11 +2397,395 @@ export class DatabaseStorage implements IStorage {
 
   async incrementEnrollmentTokenUsage(token: string): Promise<void> {
     await db.update(enrollmentTokens)
-      .set({ 
+      .set({
         usageCount: sql`${enrollmentTokens.usageCount} + 1`,
         lastUsedAt: new Date()
       })
       .where(eq(enrollmentTokens.token, token));
+  }
+
+  // ============================================================================
+  // SaaS Governance (Phase 0)
+  // ============================================================================
+
+  // SaaS Apps
+  async getSaasApps(tenantId: string, filters?: {approvalStatus?: string; category?: string; search?: string}): Promise<SaasApp[]> {
+    const conditions = [eq(saasApps.tenantId, tenantId)];
+
+    if (filters?.approvalStatus) {
+      conditions.push(eq(saasApps.approvalStatus, filters.approvalStatus));
+    }
+    if (filters?.category) {
+      conditions.push(eq(saasApps.category, filters.category));
+    }
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(saasApps.name, `%${filters.search}%`),
+        ilike(saasApps.vendor, `%${filters.search}%`)
+      ) as any);
+    }
+
+    return db.select().from(saasApps).where(and(...conditions)).orderBy(desc(saasApps.createdAt));
+  }
+
+  async getSaasApp(id: string, tenantId: string): Promise<SaasApp | undefined> {
+    const [app] = await db.select().from(saasApps).where(and(eq(saasApps.id, id), eq(saasApps.tenantId, tenantId)));
+    return app;
+  }
+
+  async createSaasApp(app: InsertSaasApp): Promise<SaasApp> {
+    const [created] = await db.insert(saasApps).values(app).returning();
+    return created;
+  }
+
+  async updateSaasApp(id: string, tenantId: string, app: Partial<InsertSaasApp>): Promise<SaasApp | undefined> {
+    const [updated] = await db.update(saasApps)
+      .set({ ...app, updatedAt: new Date() })
+      .where(and(eq(saasApps.id, id), eq(saasApps.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSaasApp(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(saasApps).where(and(eq(saasApps.id, id), eq(saasApps.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updateSaasAppApprovalStatus(id: string, tenantId: string, status: string): Promise<SaasApp | undefined> {
+    const [updated] = await db.update(saasApps)
+      .set({ approvalStatus: status, updatedAt: new Date() })
+      .where(and(eq(saasApps.id, id), eq(saasApps.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async getSaasAppUsers(appId: string, tenantId: string): Promise<UserAppAccess[]> {
+    return db.select().from(userAppAccess)
+      .where(and(eq(userAppAccess.appId, appId), eq(userAppAccess.tenantId, tenantId)))
+      .orderBy(desc(userAppAccess.createdAt));
+  }
+
+  async getSaasAppStats(tenantId: string): Promise<any> {
+    const apps = await db.select().from(saasApps).where(eq(saasApps.tenantId, tenantId));
+    const total = apps.length;
+    const approved = apps.filter(a => a.approvalStatus === 'approved').length;
+    const pending = apps.filter(a => a.approvalStatus === 'pending').length;
+    const denied = apps.filter(a => a.approvalStatus === 'denied').length;
+    const highRisk = apps.filter(a => (a.riskScore || 0) >= 70).length;
+
+    return { total, approved, pending, denied, highRisk };
+  }
+
+  // SaaS Contracts
+  async getSaasContracts(tenantId: string, filters?: {status?: string; appId?: string}): Promise<SaasContract[]> {
+    const conditions = [eq(saasContracts.tenantId, tenantId)];
+
+    if (filters?.status) {
+      conditions.push(eq(saasContracts.status, filters.status));
+    }
+    if (filters?.appId) {
+      conditions.push(eq(saasContracts.appId, filters.appId));
+    }
+
+    return db.select().from(saasContracts).where(and(...conditions)).orderBy(desc(saasContracts.createdAt));
+  }
+
+  async getSaasContract(id: string, tenantId: string): Promise<SaasContract | undefined> {
+    const [contract] = await db.select().from(saasContracts)
+      .where(and(eq(saasContracts.id, id), eq(saasContracts.tenantId, tenantId)));
+    return contract;
+  }
+
+  async createSaasContract(contract: InsertSaasContract): Promise<SaasContract> {
+    const [created] = await db.insert(saasContracts).values(contract).returning();
+    return created;
+  }
+
+  async updateSaasContract(id: string, tenantId: string, contract: Partial<InsertSaasContract>): Promise<SaasContract | undefined> {
+    const [updated] = await db.update(saasContracts)
+      .set({ ...contract, updatedAt: new Date() })
+      .where(and(eq(saasContracts.id, id), eq(saasContracts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSaasContract(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(saasContracts)
+      .where(and(eq(saasContracts.id, id), eq(saasContracts.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async getUpcomingRenewals(tenantId: string, days: number): Promise<SaasContract[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+
+    return db.select().from(saasContracts)
+      .where(and(
+        eq(saasContracts.tenantId, tenantId),
+        eq(saasContracts.status, 'active'),
+        isNotNull(saasContracts.renewalDate),
+        sql`${saasContracts.renewalDate} <= ${futureDate}`
+      ))
+      .orderBy(saasContracts.renewalDate);
+  }
+
+  async updateRenewalAlerted(id: string, tenantId: string): Promise<SaasContract | undefined> {
+    const [updated] = await db.update(saasContracts)
+      .set({ renewalAlerted: true, updatedAt: new Date() })
+      .where(and(eq(saasContracts.id, id), eq(saasContracts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // User App Access
+  async getUserAppAccesses(tenantId: string, filters?: {userId?: string; appId?: string; status?: string}): Promise<UserAppAccess[]> {
+    const conditions = [eq(userAppAccess.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(userAppAccess.userId, filters.userId));
+    }
+    if (filters?.appId) {
+      conditions.push(eq(userAppAccess.appId, filters.appId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(userAppAccess.status, filters.status));
+    }
+
+    return db.select().from(userAppAccess).where(and(...conditions)).orderBy(desc(userAppAccess.createdAt));
+  }
+
+  async getUserAppAccess(id: string, tenantId: string): Promise<UserAppAccess | undefined> {
+    const [access] = await db.select().from(userAppAccess)
+      .where(and(eq(userAppAccess.id, id), eq(userAppAccess.tenantId, tenantId)));
+    return access;
+  }
+
+  async createUserAppAccess(access: InsertUserAppAccess): Promise<UserAppAccess> {
+    const [created] = await db.insert(userAppAccess).values(access).returning();
+    return created;
+  }
+
+  async updateUserAppAccess(id: string, tenantId: string, access: Partial<InsertUserAppAccess>): Promise<UserAppAccess | undefined> {
+    const [updated] = await db.update(userAppAccess)
+      .set({ ...access, updatedAt: new Date() })
+      .where(and(eq(userAppAccess.id, id), eq(userAppAccess.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteUserAppAccess(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(userAppAccess)
+      .where(and(eq(userAppAccess.id, id), eq(userAppAccess.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async revokeUserAppAccess(id: string, tenantId: string, revokedBy: string): Promise<UserAppAccess | undefined> {
+    const [updated] = await db.update(userAppAccess)
+      .set({
+        status: 'revoked',
+        accessRevokedDate: new Date(),
+        assignedBy: revokedBy,
+        updatedAt: new Date()
+      })
+      .where(and(eq(userAppAccess.id, id), eq(userAppAccess.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // OAuth Tokens
+  async getOauthTokens(tenantId: string, filters?: {userId?: string; appId?: string; status?: string; riskLevel?: string}): Promise<OauthToken[]> {
+    const conditions = [eq(oauthTokens.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(oauthTokens.userId, filters.userId));
+    }
+    if (filters?.appId) {
+      conditions.push(eq(oauthTokens.appId, filters.appId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(oauthTokens.status, filters.status));
+    }
+    if (filters?.riskLevel) {
+      conditions.push(eq(oauthTokens.riskLevel, filters.riskLevel));
+    }
+
+    return db.select().from(oauthTokens).where(and(...conditions)).orderBy(desc(oauthTokens.createdAt));
+  }
+
+  async getOauthToken(id: string, tenantId: string): Promise<OauthToken | undefined> {
+    const [token] = await db.select().from(oauthTokens)
+      .where(and(eq(oauthTokens.id, id), eq(oauthTokens.tenantId, tenantId)));
+    return token;
+  }
+
+  async createOauthToken(token: InsertOauthToken): Promise<OauthToken> {
+    const [created] = await db.insert(oauthTokens).values(token).returning();
+    return created;
+  }
+
+  async updateOauthToken(id: string, tenantId: string, token: Partial<InsertOauthToken>): Promise<OauthToken | undefined> {
+    const [updated] = await db.update(oauthTokens)
+      .set({ ...token, updatedAt: new Date() })
+      .where(and(eq(oauthTokens.id, id), eq(oauthTokens.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteOauthToken(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(oauthTokens)
+      .where(and(eq(oauthTokens.id, id), eq(oauthTokens.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async revokeOauthToken(id: string, tenantId: string, revokedBy: string, reason: string): Promise<OauthToken | undefined> {
+    const [updated] = await db.update(oauthTokens)
+      .set({
+        status: 'revoked',
+        revokedAt: new Date(),
+        revokedBy,
+        revocationReason: reason,
+        updatedAt: new Date()
+      })
+      .where(and(eq(oauthTokens.id, id), eq(oauthTokens.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Identity Providers
+  async getIdentityProviders(tenantId: string): Promise<IdentityProvider[]> {
+    return db.select().from(identityProviders)
+      .where(eq(identityProviders.tenantId, tenantId))
+      .orderBy(desc(identityProviders.createdAt));
+  }
+
+  async getIdentityProvider(id: string, tenantId: string): Promise<IdentityProvider | undefined> {
+    const [provider] = await db.select().from(identityProviders)
+      .where(and(eq(identityProviders.id, id), eq(identityProviders.tenantId, tenantId)));
+    return provider;
+  }
+
+  async getIdentityProviderByType(type: string, tenantId: string): Promise<IdentityProvider | undefined> {
+    const [provider] = await db.select().from(identityProviders)
+      .where(and(eq(identityProviders.type, type), eq(identityProviders.tenantId, tenantId)));
+    return provider;
+  }
+
+  async createIdentityProvider(provider: InsertIdentityProvider): Promise<IdentityProvider> {
+    const [created] = await db.insert(identityProviders).values(provider).returning();
+    return created;
+  }
+
+  async updateIdentityProvider(id: string, tenantId: string, provider: Partial<InsertIdentityProvider>): Promise<IdentityProvider | undefined> {
+    const [updated] = await db.update(identityProviders)
+      .set({ ...provider, updatedAt: new Date() })
+      .where(and(eq(identityProviders.id, id), eq(identityProviders.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteIdentityProvider(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(identityProviders)
+      .where(and(eq(identityProviders.id, id), eq(identityProviders.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updateIdpSyncStatus(id: string, tenantId: string, status: string, error?: string): Promise<IdentityProvider | undefined> {
+    const [updated] = await db.update(identityProviders)
+      .set({
+        syncStatus: status,
+        syncError: error || null,
+        lastSyncAt: status === 'idle' ? new Date() : undefined,
+        updatedAt: new Date()
+      })
+      .where(and(eq(identityProviders.id, id), eq(identityProviders.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // SaaS Invoices
+  async getSaasInvoices(tenantId: string, filters?: {status?: string; appId?: string}): Promise<SaasInvoice[]> {
+    const conditions = [eq(saasInvoices.tenantId, tenantId)];
+
+    if (filters?.status) {
+      conditions.push(eq(saasInvoices.status, filters.status));
+    }
+    if (filters?.appId) {
+      conditions.push(eq(saasInvoices.appId, filters.appId));
+    }
+
+    return db.select().from(saasInvoices).where(and(...conditions)).orderBy(desc(saasInvoices.invoiceDate));
+  }
+
+  async getSaasInvoice(id: string, tenantId: string): Promise<SaasInvoice | undefined> {
+    const [invoice] = await db.select().from(saasInvoices)
+      .where(and(eq(saasInvoices.id, id), eq(saasInvoices.tenantId, tenantId)));
+    return invoice;
+  }
+
+  async createSaasInvoice(invoice: InsertSaasInvoice): Promise<SaasInvoice> {
+    const [created] = await db.insert(saasInvoices).values(invoice).returning();
+    return created;
+  }
+
+  async updateSaasInvoice(id: string, tenantId: string, invoice: Partial<InsertSaasInvoice>): Promise<SaasInvoice | undefined> {
+    const [updated] = await db.update(saasInvoices)
+      .set({ ...invoice, updatedAt: new Date() })
+      .where(and(eq(saasInvoices.id, id), eq(saasInvoices.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSaasInvoice(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(saasInvoices)
+      .where(and(eq(saasInvoices.id, id), eq(saasInvoices.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Governance Policies
+  async getGovernancePolicies(tenantId: string, filters?: {policyType?: string; enabled?: boolean}): Promise<GovernancePolicy[]> {
+    const conditions = [eq(governancePolicies.tenantId, tenantId)];
+
+    if (filters?.policyType) {
+      conditions.push(eq(governancePolicies.policyType, filters.policyType));
+    }
+    if (filters?.enabled !== undefined) {
+      conditions.push(eq(governancePolicies.enabled, filters.enabled));
+    }
+
+    return db.select().from(governancePolicies).where(and(...conditions)).orderBy(desc(governancePolicies.priority));
+  }
+
+  async getGovernancePolicy(id: string, tenantId: string): Promise<GovernancePolicy | undefined> {
+    const [policy] = await db.select().from(governancePolicies)
+      .where(and(eq(governancePolicies.id, id), eq(governancePolicies.tenantId, tenantId)));
+    return policy;
+  }
+
+  async createGovernancePolicy(policy: InsertGovernancePolicy): Promise<GovernancePolicy> {
+    const [created] = await db.insert(governancePolicies).values(policy).returning();
+    return created;
+  }
+
+  async updateGovernancePolicy(id: string, tenantId: string, policy: Partial<InsertGovernancePolicy>): Promise<GovernancePolicy | undefined> {
+    const [updated] = await db.update(governancePolicies)
+      .set({ ...policy, updatedAt: new Date() })
+      .where(and(eq(governancePolicies.id, id), eq(governancePolicies.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteGovernancePolicy(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(governancePolicies)
+      .where(and(eq(governancePolicies.id, id), eq(governancePolicies.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async toggleGovernancePolicy(id: string, tenantId: string, enabled: boolean): Promise<GovernancePolicy | undefined> {
+    const [updated] = await db.update(governancePolicies)
+      .set({ enabled, updatedAt: new Date() })
+      .where(and(eq(governancePolicies.id, id), eq(governancePolicies.tenantId, tenantId)))
+      .returning();
+    return updated;
   }
 }
 
