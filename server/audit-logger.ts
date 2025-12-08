@@ -66,11 +66,18 @@ export const AuditActions = {
   // Reports & Analytics
   REPORT_GENERATE: "report_generate",
   REPORT_EXPORT: "report_export",
+
+  // Generic CRUD actions (for new features)
+  CREATE: "create",
+  READ: "read",
+  UPDATE: "update",
+  DELETE: "delete",
+  SYNC: "sync",
 } as const;
 
 export const ResourceTypes = {
   USER: "user",
-  ASSET: "asset", 
+  ASSET: "asset",
   LICENSE: "software_license",
   TICKET: "ticket",
   COMMENT: "comment",
@@ -82,6 +89,14 @@ export const ResourceTypes = {
   RECOMMENDATION: "recommendation",
   REPORT: "report",
   SYSTEM: "system",
+  // SaaS Governance (Phase 0)
+  SAAS_APP: "saas_app",
+  SAAS_CONTRACT: "saas_contract",
+  USER_APP_ACCESS: "user_app_access",
+  OAUTH_TOKEN: "oauth_token",
+  IDENTITY_PROVIDER: "identity_provider",
+  SAAS_INVOICE: "saas_invoice",
+  GOVERNANCE_POLICY: "governance_policy",
 } as const;
 
 interface AuditLogOptions {
