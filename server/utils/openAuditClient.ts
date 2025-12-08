@@ -22,6 +22,42 @@ const AXIOS_OPTS: AxiosRequestConfig = {
   validateStatus: (s) => s >= 200 && s < 400,
 };
 
+/**
+ * Build minimal Open-AudIT XML for device submission
+ */
+export function buildMinimalOAXml(opts: {
+  hostname: string;
+  ip: string | null;
+  serial: string | null;
+  osName: string | null;
+  osVersion: string | null;
+  manufacturer: string | null;
+  model: string | null;
+}): string {
+  const escape = (str: string | null) => {
+    if (!str) return "";
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  };
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<system>
+  <sys>
+    <hostname>${escape(opts.hostname)}</hostname>
+    <ip>${escape(opts.ip)}</ip>
+    <serial>${escape(opts.serial)}</serial>
+    <manufacturer>${escape(opts.manufacturer)}</manufacturer>
+    <model>${escape(opts.model)}</model>
+    <os_name>${escape(opts.osName)}</os_name>
+    <os_version>${escape(opts.osVersion)}</os_version>
+  </sys>
+</system>`;
+}
+
 /** ---- Session login: returns a consolidated Cookie header ---- */
 export async function oaLogin(): Promise<string> {
   const url = `${OA_BASE_URL}/index.php/logon`;

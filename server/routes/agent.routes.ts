@@ -3,7 +3,7 @@ import { db } from "../db";
 import * as s from "@db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
-import { buildMinimalOAXml, oaSubmitDeviceXML, oaFindDeviceId } from "../services/openaudit";
+import { buildMinimalOAXml, oaSubmitDeviceXML, oaFindDeviceId } from "../utils/openAuditClient";
 import { markSyncChanged } from "../utils/syncHeartbeat";
 
 const router = Router();

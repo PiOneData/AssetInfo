@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
-import { validateWebhookAuth, validateEmailData, processEmailToTicket } from "../services/emailToTicket";
+import { validateWebhookAuth, validateEmailData, processEmailToTicket } from "../services/email-to-ticket";
 
 const router = Router();
 const upload = multer();

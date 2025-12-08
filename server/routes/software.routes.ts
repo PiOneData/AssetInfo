@@ -3,7 +3,7 @@ import { db } from "../db";
 import * as s from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import { authenticateToken } from "../middleware/auth.middleware";
-import { oaFetchDeviceSoftware } from "../services/openaudit";
+import { oaFetchDeviceSoftware } from "../utils/openAuditClient";
 
 const router = Router();
 

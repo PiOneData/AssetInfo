@@ -1461,8 +1461,7 @@ router.post("/bulk/import", authenticateToken, requireRole("admin"), upload.sing
       errors: createErrors.length,
       skipped: skipped.length,
       createdUsers: createdUsers,
-      createErrors,
-      skipped
+      createErrors
     });
 
   } catch (error) {
