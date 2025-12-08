@@ -3,15 +3,27 @@ import { createServer, type Server } from "http";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "../swagger.config";
 import authRoutes from "./auth.routes";
-// Import other route modules as they are created
-// import assetsRoutes from "./assets.routes";
-// import usersRoutes from "./users.routes";
-// import ticketsRoutes from "./tickets.routes";
-// import vendorsRoutes from "./vendors.routes";
-// ... etc
-
-// Import legacy routes temporarily
-import { registerRoutes as registerLegacyRoutes } from "../routes.legacy";
+import usersRoutes from "./users.routes";
+import ticketsRoutes from "./tickets.routes";
+import assetsRoutes from "./assets.routes";
+import vendorsRoutes from "./vendors.routes";
+import licensesRoutes from "./licenses.routes";
+import dashboardRoutes from "./dashboard.routes";
+import searchRoutes from "./search.routes";
+import notificationsRoutes from "./notifications.routes";
+import recommendationsRoutes from "./recommendations.routes";
+import aiRoutes from "./ai.routes";
+import orgRoutes from "./org.routes";
+import masterRoutes from "./master.routes";
+import syncRoutes from "./sync.routes";
+import auditLogsRoutes from "./audit-logs.routes";
+import geographicRoutes from "./geographic.routes";
+import webhookRoutes from "./webhook.routes";
+import agentRoutes from "./agent.routes";
+import enrollmentRoutes from "./enrollment.routes";
+import softwareRoutes from "./software.routes";
+import debugRoutes from "./debug.routes";
+// All routes have been migrated from routes.legacy.ts
 
 /**
  * Register all application routes
@@ -40,30 +52,39 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Register modular routes
+  // ========================================
+  // MODULAR ROUTES (Fully Migrated)
+  // ========================================
   app.use("/api/auth", authRoutes);
+  app.use("/api/users", usersRoutes);           // 19 routes - User management
+  app.use("/api/tickets", ticketsRoutes);       // 12 routes - Service desk
+  app.use("/api/assets", assetsRoutes);         // 12 routes - Asset management
+  app.use("/api/vendors", vendorsRoutes);       // 4 routes - Vendor management
+  app.use("/api/licenses", licensesRoutes);     // 2 routes - License tracking
+  app.use("/api/dashboard", dashboardRoutes);   // 1 route - Dashboard metrics
+  app.use("/api/search", searchRoutes);         // 1 route - Global search
+  app.use("/api/notifications", notificationsRoutes); // 1 route - Notifications
+  app.use("/api/recommendations", recommendationsRoutes); // 3 routes - AI recommendations
+  app.use("/api/ai", aiRoutes);                 // 2 routes - AI queries
+  app.use("/api/org", orgRoutes);               // 2 routes - Organization settings
+  app.use("/api/master", masterRoutes);         // 3 routes - Master data
+  app.use("/api/sync", syncRoutes);             // 1 route - Sync status
+  app.use("/api/audit-logs", auditLogsRoutes);  // 2 routes - Audit logs
+  app.use("/api/geographic", geographicRoutes); // 4 routes - Geographic data
+  app.use("/api/webhook", webhookRoutes);       // 1 route - Email to ticket webhook
+  app.use("/api/agent", agentRoutes);           // 1 route - Agent enrollment
+  app.use("/api/software", softwareRoutes);     // 2 routes - Software management
+  app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 
-  // TODO: Uncomment as route modules are created
-  // app.use("/api/assets", assetsRoutes);
-  // app.use("/api/users", usersRoutes);
-  // app.use("/api/tickets", ticketsRoutes);
-  // app.use("/api/vendors", vendorsRoutes);
-  // app.use("/api/licenses", licensesRoutes);
-  // app.use("/api/recommendations", recommendationsRoutes);
-  // app.use("/api/ai", aiRoutes);
-  // app.use("/api/compliance", complianceRoutes);
-  // app.use("/api/discovery", discoveryRoutes);
-  // app.use("/api/reports", reportsRoutes);
-  // app.use("/api/geographic", geographicRoutes);
-  // app.use("/api/search", searchRoutes);
-  // app.use("/api/notifications", notificationsRoutes);
-  // app.use("/api/dashboard", dashboardRoutes);
-  // app.use("/api/audit-logs", auditLogsRoutes);
-  // app.use("/api/org", orgRoutes);
-  // app.use("/api/webhook", webhookRoutes);
+  // SPECIAL ROUTES (Non-API)
+  app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
 
-  // Register legacy routes (temporary - will be removed as routes are migrated)
-  const server = await registerLegacyRoutes(app);
+  // ========================================
+  // ALL ROUTES MIGRATED ✅
+  // All routes from routes.legacy.ts have been successfully migrated
+  // ========================================
 
-  return server;
+  // Create and return HTTP server
+  const httpServer = createServer(app);
+  return httpServer;
 }

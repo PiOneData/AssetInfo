@@ -2,12 +2,13 @@
 import axios, { AxiosRequestConfig } from "axios";
 
 /** ---- ENV (loaded by server bootstrap via dotenv) ---- */
-// Default OpenAudit credentials - shared across all tenants
-export const OA_BASE_URL = process.env.OPEN_AUDIT_URL || "https://open-audit.vistrivetech.com";
-const OA_USERNAME = process.env.OPEN_AUDIT_USERNAME || "admin";
-const OA_PASSWORD = process.env.OPEN_AUDIT_PASSWORD || "vistrivetech";
+export const OA_BASE_URL = process.env.OA_BASE_URL || "";
+const OA_USERNAME = process.env.OA_USERNAME || "";
+const OA_PASSWORD = process.env.OA_PASSWORD || "";
 
-console.log(`[OpenAudit] Using credentials - URL: ${OA_BASE_URL}, Username: ${OA_USERNAME}`);
+if (!OA_BASE_URL || !OA_USERNAME || !OA_PASSWORD) {
+  console.warn("Warning: Missing OA_* env vars (OA_BASE_URL, OA_USERNAME, OA_PASSWORD). OpenAudit integration will not work.");
+}
 
 /** ---- Axios defaults ---- */
 const AXIOS_OPTS: AxiosRequestConfig = {
@@ -20,6 +21,42 @@ const AXIOS_OPTS: AxiosRequestConfig = {
   // Default: treat 2xx-3xx as OK; individual calls override when we want to capture all
   validateStatus: (s) => s >= 200 && s < 400,
 };
+
+/**
+ * Build minimal Open-AudIT XML for device submission
+ */
+export function buildMinimalOAXml(opts: {
+  hostname: string;
+  ip: string | null;
+  serial: string | null;
+  osName: string | null;
+  osVersion: string | null;
+  manufacturer: string | null;
+  model: string | null;
+}): string {
+  const escape = (str: string | null) => {
+    if (!str) return "";
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  };
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<system>
+  <sys>
+    <hostname>${escape(opts.hostname)}</hostname>
+    <ip>${escape(opts.ip)}</ip>
+    <serial>${escape(opts.serial)}</serial>
+    <manufacturer>${escape(opts.manufacturer)}</manufacturer>
+    <model>${escape(opts.model)}</model>
+    <os_name>${escape(opts.osName)}</os_name>
+    <os_version>${escape(opts.osVersion)}</os_version>
+  </sys>
+</system>`;
+}
 
 /** ---- Session login: returns a consolidated Cookie header ---- */
 export async function oaLogin(baseUrl?: string, username?: string, password?: string): Promise<string> {

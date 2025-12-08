@@ -2,15 +2,35 @@ import "dotenv/config";
 import path from "node:path";
 import { startOpenAuditScheduler } from "./services/openauditScheduler";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerAllRoutes } from "./routes";
-import { log } from "./vite";
+import { registerRoutes } from "./routes";
+import { serveStatic, log } from "./vite";
 import { seedDatabase } from "./storage";
+import {
+  corsMiddleware,
+  helmetMiddleware,
+  apiLimiter,
+  compressionMiddleware,
+  securityHeaders,
+  protectDevRoutes,
+} from "./middleware/security.middleware";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
-// Serve static assets from ./static
+// Security middleware (must be first)
+app.use(corsMiddleware);
+app.use(helmetMiddleware);
+app.use(securityHeaders);
+app.use(protectDevRoutes);
+app.use(compressionMiddleware);
+
+// Body parsers
+app.use(express.json({ limit: "10mb" })); // Limit payload size
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+
+// API rate limiting
+app.use("/api", apiLimiter);
+
+// Serve static assets from ./static (e.g., /static/installers/itam-agent-*.{msi,pkg})
 app.use(
   "/static",
   express.static(path.resolve(process.cwd(), "static"), {
@@ -19,7 +39,7 @@ app.use(
   })
 );
 
-// Request/response logging (API only)
+// Request/response logging (API only), with basic redaction
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -36,6 +56,7 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
 
+      // SECURITY: Never log sensitive endpoints or their responses
       if (capturedJsonResponse && !path.includes("/auth/")) {
         const safeResponse = { ...capturedJsonResponse };
         delete (safeResponse as any).token;
@@ -70,9 +91,7 @@ app.use((req, res, next) => {
     console.warn("Error details:", error instanceof Error ? error.message : String(error));
   }
 
-  const server = await registerAllRoutes(app);
-
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  const server = await registerRoutes(app);
 
   // Global error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -87,27 +106,14 @@ app.use((req, res, next) => {
     }
   });
 
-  // Serve static files from dist/public
-  const distPath = path.resolve(process.cwd(), "dist", "public");
-  app.use(express.static(distPath));
+  // Serve static files in production
+  serveStatic(app);
 
-  // Fall through to index.html for frontend routes (exclude backend routes)
-  app.use((req, res, next) => {
-    // Let backend handle these routes
-    if (req.path.startsWith('/api/') || 
-        req.path.startsWith('/enroll') || 
-        req.path.startsWith('/static/')) {
-      return next();
-    }
-    // Serve SPA for all other routes
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
-
-  const port = parseInt(process.env.PORT ?? "5926", 10);
-  const host = process.env.HOST ?? "0.0.0.0";
+  const port = parseInt(process.env.PORT ?? "5050", 10);
+  const host = process.env.HOST ?? "0.0.0.0"; // bind to all interfaces so the VM can reach it
 
   server.listen(port, host, () => {
-    log(`serving on http://${host}:${port}`);
-    startOpenAuditScheduler();
+    log(`Production server running on http://${host}:${port}`);
+    startOpenAuditScheduler(); // Start the Open-AudIT sync scheduler
   });
 })();
