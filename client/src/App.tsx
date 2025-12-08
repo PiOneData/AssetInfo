@@ -26,6 +26,8 @@ import ComplianceLicensePage from "@/pages/compliance-license";
 import ComplianceScoreDetails from "@/pages/compliance/ComplianceScoreDetails";
 import SaasApps from "@/pages/saas-apps";
 import SaasContracts from "@/pages/saas-contracts";
+import IdentityProviders from "@/pages/identity-providers";
+import GovernancePolicies from "@/pages/governance-policies";
 import { ThemeProvider } from "@/contexts/theme-context";
 
 function Router() {
@@ -120,6 +122,26 @@ function Router() {
       <Route path="/saas-contracts/new">
         <ProtectedRoute requiredRole="technician">
           <SaasContracts key="new" />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/identity-providers">
+        <ProtectedRoute requiredRole="admin">
+          <IdentityProviders />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/identity-providers/new">
+        <ProtectedRoute requiredRole="admin">
+          <IdentityProviders key="new" />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/governance-policies">
+        <ProtectedRoute requiredRole="admin">
+          <GovernancePolicies />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/governance-policies/new">
+        <ProtectedRoute requiredRole="admin">
+          <GovernancePolicies key="new" />
         </ProtectedRoute>
       </Route>
       <Route path="/reports">
