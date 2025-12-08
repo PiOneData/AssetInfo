@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { 
-  LayoutDashboard, 
-  Monitor, 
-  Code, 
-  Bot, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Monitor,
+  Code,
+  Bot,
+  BarChart3,
+  Settings,
   LogOut,
   User,
   Server,
@@ -31,7 +31,8 @@ import {
   Building2,
   Plus,
   Calendar,
-  Network
+  Network,
+  Cloud
 } from "lucide-react";
 
 const navigation = [
@@ -49,6 +50,16 @@ const navigation = [
     ]
   },
   { name: "Vendors", href: "/vendors", icon: Building2, requiredRole: "it-manager" },
+  {
+    name: "SaaS Governance",
+    href: "/saas-apps",
+    icon: Cloud,
+    requiredRole: "it-manager",
+    subItems: [
+      { name: "Applications", href: "/saas-apps", icon: Cloud },
+      { name: "Contracts", href: "/saas-contracts", icon: FileText },
+    ]
+  },
   { name: "Reports", href: "/reports", icon: BarChart3, requiredRole: "it-manager" },
   { name: "Team Management", href: "/users", icon: Users, requiredRole: "admin" },
   { name: "Settings", href: "/settings", icon: Settings },
