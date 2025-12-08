@@ -18,11 +18,12 @@ import masterRoutes from "./master.routes";
 import syncRoutes from "./sync.routes";
 import auditLogsRoutes from "./audit-logs.routes";
 import geographicRoutes from "./geographic.routes";
-// Import other route modules as they are created
-// ... etc
-
-// Import legacy routes temporarily
-import { registerRoutes as registerLegacyRoutes } from "../routes.legacy";
+import webhookRoutes from "./webhook.routes";
+import agentRoutes from "./agent.routes";
+import enrollmentRoutes from "./enrollment.routes";
+import softwareRoutes from "./software.routes";
+import debugRoutes from "./debug.routes";
+// All routes have been migrated from routes.legacy.ts
 
 /**
  * Register all application routes
@@ -70,29 +71,20 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/sync", syncRoutes);             // 1 route - Sync status
   app.use("/api/audit-logs", auditLogsRoutes);  // 2 routes - Audit logs
   app.use("/api/geographic", geographicRoutes); // 4 routes - Geographic data
-
-  // ========================================
-  // TODO: MIGRATE THESE ROUTES
-  // Priority order based on usage frequency
-  // See /MIGRATION_GUIDE.md for instructions
-  // ========================================
-
-  // REMAINING ROUTES
-  // app.use("/api/software", softwareRoutes);     // 2 routes - Software management
-  // app.use("/api/webhook", webhookRoutes);       // 1 route - Webhooks
-  // app.use("/api/agent", agentRoutes);           // 1 route - Agent enrollment
-  // app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
+  app.use("/api/webhook", webhookRoutes);       // 1 route - Email to ticket webhook
+  app.use("/api/agent", agentRoutes);           // 1 route - Agent enrollment
+  app.use("/api/software", softwareRoutes);     // 2 routes - Software management
+  app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 
   // SPECIAL ROUTES (Non-API)
-  // app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
+  app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
 
   // ========================================
-  // LEGACY ROUTES (Temporary)
-  // All routes not yet migrated live here
-  // This file will be deleted once all routes
-  // are extracted into modular files above
+  // ALL ROUTES MIGRATED ✅
+  // All routes from routes.legacy.ts have been successfully migrated
   // ========================================
-  const server = await registerLegacyRoutes(app);
 
-  return server;
+  // Create and return HTTP server
+  const httpServer = createServer(app);
+  return httpServer;
 }
