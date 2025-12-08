@@ -23,6 +23,11 @@ import agentRoutes from "./agent.routes";
 import enrollmentRoutes from "./enrollment.routes";
 import softwareRoutes from "./software.routes";
 import debugRoutes from "./debug.routes";
+// SaaS Governance routes (Phase 0)
+import saasAppsRoutes from "./saas-apps.routes";
+import saasContractsRoutes from "./saas-contracts.routes";
+import identityProvidersRoutes from "./identity-providers.routes";
+import governancePoliciesRoutes from "./governance-policies.routes";
 // All routes have been migrated from routes.legacy.ts
 
 /**
@@ -75,6 +80,14 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/agent", agentRoutes);           // 1 route - Agent enrollment
   app.use("/api/software", softwareRoutes);     // 2 routes - Software management
   app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
+
+  // ========================================
+  // SAAS GOVERNANCE ROUTES (Phase 0)
+  // ========================================
+  app.use("/api/saas-apps", saasAppsRoutes);           // 8 routes - SaaS app management
+  app.use("/api/saas-contracts", saasContractsRoutes); // 7 routes - Contract management
+  app.use("/api/identity-providers", identityProvidersRoutes); // 7 routes - IdP configuration
+  app.use("/api/governance-policies", governancePoliciesRoutes); // 6 routes - Policy automation
 
   // SPECIAL ROUTES (Non-API)
   app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
