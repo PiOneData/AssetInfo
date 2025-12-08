@@ -3,10 +3,10 @@ import { createServer, type Server } from "http";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "../swagger.config";
 import authRoutes from "./auth.routes";
+import usersRoutes from "./users.routes";
+import ticketsRoutes from "./tickets.routes";
 // Import other route modules as they are created
 // import assetsRoutes from "./assets.routes";
-// import usersRoutes from "./users.routes";
-// import ticketsRoutes from "./tickets.routes";
 // import vendorsRoutes from "./vendors.routes";
 // ... etc
 
@@ -44,6 +44,8 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   // MODULAR ROUTES (Fully Migrated)
   // ========================================
   app.use("/api/auth", authRoutes);
+  app.use("/api/users", usersRoutes);           // 19 routes - User management
+  app.use("/api/tickets", ticketsRoutes);       // 12 routes - Service desk
 
   // ========================================
   // TODO: MIGRATE THESE ROUTES
@@ -52,8 +54,6 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   // ========================================
 
   // HIGH PRIORITY (Most Used)
-  // app.use("/api/users", usersRoutes);           // 19 routes - User management
-  // app.use("/api/tickets", ticketsRoutes);       // 12 routes - Service desk
   // app.use("/api/assets", assetsRoutes);         // 13 routes - Asset management
 
   // MEDIUM PRIORITY
