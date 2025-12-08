@@ -313,6 +313,55 @@ export interface IStorage {
   getPolicyTemplates(filters?: {category?: string}): Promise<PolicyTemplate[]>;
   getPolicyTemplate(id: string): Promise<PolicyTemplate | undefined>;
   incrementTemplatePopularity(id: string): Promise<void>;
+
+  // Access Review Campaigns (Phase 5)
+  getAccessReviewCampaigns(tenantId: string, filters?: {status?: string}): Promise<AccessReviewCampaign[]>;
+  getAccessReviewCampaign(id: string, tenantId: string): Promise<AccessReviewCampaign | undefined>;
+  createAccessReviewCampaign(campaign: InsertAccessReviewCampaign): Promise<AccessReviewCampaign>;
+  updateAccessReviewCampaign(id: string, tenantId: string, updates: Partial<InsertAccessReviewCampaign>): Promise<AccessReviewCampaign | undefined>;
+  deleteAccessReviewCampaign(id: string, tenantId: string): Promise<boolean>;
+
+  // Access Review Items (Phase 5)
+  getAccessReviewItems(campaignId: string): Promise<AccessReviewItem[]>;
+  getAccessReviewItem(id: string): Promise<AccessReviewItem | undefined>;
+  getAccessReviewItemsPending(campaignId: string): Promise<AccessReviewItem[]>;
+  createAccessReviewItem(item: InsertAccessReviewItem): Promise<AccessReviewItem>;
+  updateAccessReviewItem(id: string, updates: Partial<InsertAccessReviewItem>): Promise<AccessReviewItem | undefined>;
+
+  // Access Review Decisions (Phase 5)
+  getAccessReviewDecisions(campaignId: string): Promise<AccessReviewDecision[]>;
+  createAccessReviewDecision(decision: InsertAccessReviewDecision): Promise<AccessReviewDecision>;
+
+  // Role Templates (Phase 5)
+  getRoleTemplates(tenantId: string, filters?: {department?: string}): Promise<RoleTemplate[]>;
+  getRoleTemplate(id: string, tenantId: string): Promise<RoleTemplate | undefined>;
+  createRoleTemplate(template: InsertRoleTemplate): Promise<RoleTemplate>;
+  updateRoleTemplate(id: string, tenantId: string, updates: Partial<InsertRoleTemplate>): Promise<RoleTemplate | undefined>;
+  deleteRoleTemplate(id: string, tenantId: string): Promise<boolean>;
+
+  // User Role Assignments (Phase 5)
+  getUserRoleAssignments(tenantId: string, filters?: {userId?: string; isActive?: boolean}): Promise<UserRoleAssignment[]>;
+  getUserRoleAssignment(id: string, tenantId: string): Promise<UserRoleAssignment | undefined>;
+  createUserRoleAssignment(assignment: InsertUserRoleAssignment): Promise<UserRoleAssignment>;
+  updateUserRoleAssignment(id: string, tenantId: string, updates: Partial<InsertUserRoleAssignment>): Promise<UserRoleAssignment | undefined>;
+
+  // Privilege Drift Alerts (Phase 5)
+  getPrivilegeDriftAlerts(tenantId: string, filters?: {status?: string; riskLevel?: string}): Promise<PrivilegeDriftAlert[]>;
+  getPrivilegeDriftAlert(id: string, tenantId: string): Promise<PrivilegeDriftAlert | undefined>;
+  createPrivilegeDriftAlert(alert: InsertPrivilegeDriftAlert): Promise<PrivilegeDriftAlert>;
+  updatePrivilegeDriftAlert(id: string, tenantId: string, updates: Partial<InsertPrivilegeDriftAlert>): Promise<PrivilegeDriftAlert | undefined>;
+
+  // Overprivileged Accounts (Phase 5)
+  getOverprivilegedAccounts(tenantId: string, filters?: {status?: string; riskLevel?: string}): Promise<OverprivilegedAccount[]>;
+  getOverprivilegedAccount(id: string, tenantId: string): Promise<OverprivilegedAccount | undefined>;
+  createOverprivilegedAccount(account: InsertOverprivilegedAccount): Promise<OverprivilegedAccount>;
+  updateOverprivilegedAccount(id: string, tenantId: string, updates: Partial<InsertOverprivilegedAccount>): Promise<OverprivilegedAccount | undefined>;
+
+  // Helper methods for Phase 5
+  getAllUserAppAccess(tenantId: string): Promise<any[]>;
+  revokeUserAppAccess(userId: string, appId: string, tenantId: string): Promise<void>;
+  updateUserAppAccessType(userId: string, appId: string, tenantId: string, newAccessType: string): Promise<void>;
+  getUsers(tenantId: string): Promise<User[]>;
 }
 
 export class DatabaseStorage implements IStorage {
