@@ -29,6 +29,7 @@ import SaasContracts from "@/pages/saas-contracts";
 import IdentityProviders from "@/pages/identity-providers";
 import GovernancePolicies from "@/pages/governance-policies";
 import DiscoveryDashboard from "@/pages/discovery-dashboard";
+import SpendDashboard from "@/pages/spend-dashboard";
 import { ThemeProvider } from "@/contexts/theme-context";
 
 function Router() {
@@ -148,6 +149,11 @@ function Router() {
       <Route path="/discovery">
         <ProtectedRoute requiredRole="it-manager">
           <DiscoveryDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/spend">
+        <ProtectedRoute requiredRole="it-manager">
+          <SpendDashboard />
         </ProtectedRoute>
       </Route>
       <Route path="/reports">

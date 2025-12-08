@@ -271,6 +271,7 @@ export interface IStorage {
   // SaaS Invoices
   getSaasInvoices(tenantId: string, filters?: {status?: string; appId?: string}): Promise<SaasInvoice[]>;
   getSaasInvoice(id: string, tenantId: string): Promise<SaasInvoice | undefined>;
+  getSaasInvoiceByExternalId(externalId: string, tenantId: string): Promise<SaasInvoice | undefined>;
   createSaasInvoice(invoice: InsertSaasInvoice): Promise<SaasInvoice>;
   updateSaasInvoice(id: string, tenantId: string, invoice: Partial<InsertSaasInvoice>): Promise<SaasInvoice | undefined>;
   deleteSaasInvoice(id: string, tenantId: string): Promise<boolean>;
@@ -2719,6 +2720,12 @@ export class DatabaseStorage implements IStorage {
   async getSaasInvoice(id: string, tenantId: string): Promise<SaasInvoice | undefined> {
     const [invoice] = await db.select().from(saasInvoices)
       .where(and(eq(saasInvoices.id, id), eq(saasInvoices.tenantId, tenantId)));
+    return invoice;
+  }
+
+  async getSaasInvoiceByExternalId(externalId: string, tenantId: string): Promise<SaasInvoice | undefined> {
+    const [invoice] = await db.select().from(saasInvoices)
+      .where(and(eq(saasInvoices.externalId, externalId), eq(saasInvoices.tenantId, tenantId)));
     return invoice;
   }
 

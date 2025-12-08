@@ -30,6 +30,8 @@ import identityProvidersRoutes from "./identity-providers.routes";
 import governancePoliciesRoutes from "./governance-policies.routes";
 // Phase 1: Discovery & Shadow IT
 import discoveryRoutes from "./discovery.routes";
+// Phase 2: Spend Management & License Intelligence
+import spendRoutes from "./spend.routes";
 // All routes have been migrated from routes.legacy.ts
 
 /**
@@ -84,13 +86,14 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 
   // ========================================
-  // SAAS GOVERNANCE ROUTES (Phase 0 & Phase 1)
+  // SAAS GOVERNANCE ROUTES (Phase 0 & Phase 1 & Phase 2)
   // ========================================
   app.use("/api/saas-apps", saasAppsRoutes);           // 8 routes - SaaS app management
   app.use("/api/saas-contracts", saasContractsRoutes); // 7 routes - Contract management
   app.use("/api/identity-providers", identityProvidersRoutes); // 7 routes - IdP configuration
   app.use("/api/governance-policies", governancePoliciesRoutes); // 6 routes - Policy automation
   app.use("/api/discovery", discoveryRoutes);          // 6 routes - Discovery dashboard (Phase 1)
+  app.use("/api/spend", spendRoutes);                  // 7 routes - Spend management (Phase 2)
 
   // SPECIAL ROUTES (Non-API)
   app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
