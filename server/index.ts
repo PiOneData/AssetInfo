@@ -1,6 +1,7 @@
 import "dotenv/config";
 import path from "node:path";
 import { startOpenAuditScheduler } from "./services/openauditScheduler";
+import { AccessReviewScheduler } from "./services/access-review/scheduler";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerAllRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -118,5 +119,6 @@ app.use((req, res, next) => {
   server.listen(port, host, () => {
     log(`serving on http://${host}:${port}`);
     startOpenAuditScheduler(); // ← start the every-minute sync (if enabled)
+    AccessReviewScheduler.initializeScheduledTasks(); // ← Phase 5: Access review automation
   });
 })();
