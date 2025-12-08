@@ -6,8 +6,9 @@ import authRoutes from "./auth.routes";
 import usersRoutes from "./users.routes";
 import ticketsRoutes from "./tickets.routes";
 import assetsRoutes from "./assets.routes";
+import vendorsRoutes from "./vendors.routes";
+import licensesRoutes from "./licenses.routes";
 // Import other route modules as they are created
-// import vendorsRoutes from "./vendors.routes";
 // ... etc
 
 // Import legacy routes temporarily
@@ -47,6 +48,8 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/users", usersRoutes);           // 19 routes - User management
   app.use("/api/tickets", ticketsRoutes);       // 12 routes - Service desk
   app.use("/api/assets", assetsRoutes);         // 12 routes - Asset management
+  app.use("/api/vendors", vendorsRoutes);       // 4 routes - Vendor management
+  app.use("/api/licenses", licensesRoutes);     // 2 routes - License tracking
 
   // ========================================
   // TODO: MIGRATE THESE ROUTES
@@ -55,10 +58,6 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   // ========================================
 
   // MEDIUM PRIORITY
-
-  // MEDIUM PRIORITY
-  // app.use("/api/vendors", vendorsRoutes);       // 4 routes - Vendor management
-  // app.use("/api/licenses", licensesRoutes);     // 2 routes - License tracking
   // app.use("/api/geographic", geographicRoutes); // 4 routes - Location data
   // app.use("/api/recommendations", recommendationsRoutes); // 3 routes - AI recommendations
 
