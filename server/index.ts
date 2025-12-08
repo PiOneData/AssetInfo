@@ -2,14 +2,34 @@ import "dotenv/config";
 import path from "node:path";
 import { startOpenAuditScheduler } from "./services/openauditScheduler";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerAllRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./storage";
 import { ensureGeographicData } from "./utils/geographic-data-loader";
+import {
+  corsMiddleware,
+  helmetMiddleware,
+  apiLimiter,
+  compressionMiddleware,
+  securityHeaders,
+  protectDevRoutes,
+} from "./middleware/security.middleware";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+
+// Security middleware (must be first)
+app.use(corsMiddleware);
+app.use(helmetMiddleware);
+app.use(securityHeaders);
+app.use(protectDevRoutes);
+app.use(compressionMiddleware);
+
+// Body parsers
+app.use(express.json({ limit: "10mb" })); // Limit payload size
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+
+// API rate limiting
+app.use("/api", apiLimiter);
 
 // Serve static assets (dev + prod) from ./static (e.g., /static/installers/itam-agent-*.{msi,pkg})
 app.use(
@@ -80,9 +100,7 @@ app.use((req, res, next) => {
     console.warn("Error details:", error instanceof Error ? error.message : String(error));
   }
 
-  const server = await registerRoutes(app);
-
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  const server = await registerAllRoutes(app);
 
   // Global error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
