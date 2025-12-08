@@ -26,6 +26,7 @@ import {
   Wifi,
   Camera,
   Shield,
+  ShieldCheck,
   Scan,
   FileText,
   Building2,
@@ -63,6 +64,7 @@ const navigation = [
       { name: "Contracts", href: "/saas-contracts", icon: FileText },
       { name: "Identity Providers", href: "/identity-providers", icon: Shield, requiredRole: "admin" },
       { name: "Policies", href: "/governance-policies", icon: Shield, requiredRole: "admin" },
+      { name: "Access Reviews", href: "/access-reviews", icon: ShieldCheck, requiredRole: "admin" },
     ]
   },
   { name: "Reports", href: "/reports", icon: BarChart3, requiredRole: "it-manager" },

@@ -30,6 +30,8 @@ import IdentityProviders from "@/pages/identity-providers";
 import GovernancePolicies from "@/pages/governance-policies";
 import DiscoveryDashboard from "@/pages/discovery-dashboard";
 import SpendDashboard from "@/pages/spend-dashboard";
+import AccessReviews from "@/pages/access-reviews";
+import AccessReviewDetail from "@/pages/access-review-detail";
 import { ThemeProvider } from "@/contexts/theme-context";
 
 function Router() {
@@ -184,6 +186,16 @@ function Router() {
       <Route path="/activity-logs">
         <ProtectedRoute requiredRole="admin">
           <ActivityLogs />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/access-reviews">
+        <ProtectedRoute requiredRole="admin">
+          <AccessReviews />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/access-reviews/:id">
+        <ProtectedRoute requiredRole="admin">
+          <AccessReviewDetail />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />
