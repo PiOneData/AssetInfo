@@ -874,84 +874,6 @@ export const createEnrollmentTokenSchema = z.object({
 });
 
 // ============================================
-// SaaS Governance Validation Schemas (Phase 0)
-// ============================================
-
-export const insertSaasAppSchema = createInsertSchema(saasApps).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  approvalStatus: z.enum(["pending", "approved", "denied"]).default("pending"),
-  riskScore: z.number().min(0).max(100).default(0),
-  discoveryMethod: z.enum(["idp", "email", "manual", "browser", "network"]).optional(),
-});
-
-export const insertSaasContractSchema = createInsertSchema(saasContracts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  billingCycle: z.enum(["monthly", "quarterly", "annual", "usage-based"]).optional(),
-  licenseType: z.enum(["per-user", "per-device", "unlimited", "consumption-based"]).optional(),
-  status: z.enum(["active", "expired", "cancelled", "pending"]).default("active"),
-  currency: z.string().length(3).default("USD"),
-});
-
-export const insertUserAppAccessSchema = createInsertSchema(userAppAccess).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  status: z.enum(["active", "revoked", "suspended"]).default("active"),
-  assignmentMethod: z.enum(["manual", "sso", "oauth", "discovered"]).optional(),
-});
-
-export const insertOauthTokenSchema = createInsertSchema(oauthTokens).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  status: z.enum(["active", "expired", "revoked"]).default("active"),
-  riskLevel: z.enum(["low", "medium", "high", "critical"]).default("low"),
-  scopes: z.array(z.string()).min(1),
-});
-
-export const insertIdentityProviderSchema = createInsertSchema(identityProviders).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  type: z.enum(["azuread", "okta", "google", "jumpcloud"]),
-  status: z.enum(["active", "disabled", "error"]).default("active"),
-  syncStatus: z.enum(["idle", "syncing", "error"]).default("idle"),
-});
-
-export const insertSaasInvoiceSchema = createInsertSchema(saasInvoices).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  status: z.enum(["pending", "paid", "overdue", "cancelled"]).default("pending"),
-  paymentMethod: z.enum(["card", "bank_transfer", "check", "other"]).optional(),
-  currency: z.string().length(3).default("USD"),
-});
-
-export const insertGovernancePolicySchema = createInsertSchema(governancePolicies).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  policyType: z.enum([
-    "approval",
-    "license_reclaim",
-    "risk_blocking",
-    "renewal_alert",
-    "offboarding"
-  ]),
-});
-
-// ============================================
 // Network Monitoring Tables
 // ============================================
 
@@ -1400,6 +1322,84 @@ export const governancePolicies = pgTable(
     idxTenantEnabled: index("idx_governance_policies_tenant_enabled").on(table.tenantId, table.enabled),
   })
 );
+
+// ============================================
+// SaaS Governance Validation Schemas (Phase 0)
+// ============================================
+
+export const insertSaasAppSchema = createInsertSchema(saasApps).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  approvalStatus: z.enum(["pending", "approved", "denied"]).default("pending"),
+  riskScore: z.number().min(0).max(100).default(0),
+  discoveryMethod: z.enum(["idp", "email", "manual", "browser", "network"]).optional(),
+});
+
+export const insertSaasContractSchema = createInsertSchema(saasContracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  billingCycle: z.enum(["monthly", "quarterly", "annual", "usage-based"]).optional(),
+  licenseType: z.enum(["per-user", "per-device", "unlimited", "consumption-based"]).optional(),
+  status: z.enum(["active", "expired", "cancelled", "pending"]).default("active"),
+  currency: z.string().length(3).default("USD"),
+});
+
+export const insertUserAppAccessSchema = createInsertSchema(userAppAccess).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["active", "revoked", "suspended"]).default("active"),
+  assignmentMethod: z.enum(["manual", "sso", "oauth", "discovered"]).optional(),
+});
+
+export const insertOauthTokenSchema = createInsertSchema(oauthTokens).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["active", "expired", "revoked"]).default("active"),
+  riskLevel: z.enum(["low", "medium", "high", "critical"]).default("low"),
+  scopes: z.array(z.string()).min(1),
+});
+
+export const insertIdentityProviderSchema = createInsertSchema(identityProviders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  type: z.enum(["azuread", "okta", "google", "jumpcloud"]),
+  status: z.enum(["active", "disabled", "error"]).default("active"),
+  syncStatus: z.enum(["idle", "syncing", "error"]).default("idle"),
+});
+
+export const insertSaasInvoiceSchema = createInsertSchema(saasInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["pending", "paid", "overdue", "cancelled"]).default("pending"),
+  paymentMethod: z.enum(["card", "bank_transfer", "check", "other"]).optional(),
+  currency: z.string().length(3).default("USD"),
+});
+
+export const insertGovernancePolicySchema = createInsertSchema(governancePolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  policyType: z.enum([
+    "approval",
+    "license_reclaim",
+    "risk_blocking",
+    "renewal_alert",
+    "offboarding"
+  ]),
+});
 
 // Types
 export type DiscoveryJob = typeof discoveryJobs.$inferSelect;
