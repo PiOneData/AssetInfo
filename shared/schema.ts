@@ -1433,3 +1433,151 @@ export type SaasInvoice = typeof saasInvoices.$inferSelect;
 export type InsertSaasInvoice = z.infer<typeof insertSaasInvoiceSchema>;
 export type GovernancePolicy = typeof governancePolicies.$inferSelect;
 export type InsertGovernancePolicy = z.infer<typeof insertGovernancePolicySchema>;
+
+// ========================================
+// Phase 3: Offboarding Automation
+// ========================================
+
+// Offboarding Playbooks Table
+export const offboardingPlaybooks = pgTable(
+  "offboarding_playbooks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    name: text("name").notNull(),
+    type: text("type").notNull(), // 'standard', 'contractor', 'transfer', 'role_change'
+    description: text("description"),
+    isDefault: boolean("is_default").default(false),
+    steps: jsonb("steps").$type<Array<{
+      type: string;
+      priority: number;
+      enabled: boolean;
+      description: string;
+    }>>().notNull(),
+    createdBy: varchar("created_by").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_offboarding_playbooks_tenant").on(table.tenantId),
+    idxType: index("idx_offboarding_playbooks_type").on(table.type),
+  })
+);
+
+// Offboarding Requests Table
+export const offboardingRequests = pgTable(
+  "offboarding_requests",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    playbookId: varchar("playbook_id"),
+    status: text("status").notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed', 'partial', 'cancelled'
+    initiatedBy: varchar("initiated_by").notNull(),
+    initiatedAt: timestamp("initiated_at").defaultNow(),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    totalTasks: integer("total_tasks").default(0),
+    completedTasks: integer("completed_tasks").default(0),
+    failedTasks: integer("failed_tasks").default(0),
+    reason: text("reason"),
+    transferToUserId: varchar("transfer_to_user_id"),
+    notes: text("notes"),
+    auditReportUrl: text("audit_report_url"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_offboarding_requests_tenant").on(table.tenantId),
+    idxUser: index("idx_offboarding_requests_user").on(table.userId),
+    idxStatus: index("idx_offboarding_requests_status").on(table.status),
+    idxInitiatedAt: index("idx_offboarding_requests_initiated_at").on(table.initiatedAt),
+  })
+);
+
+// Offboarding Tasks Table
+export const offboardingTasks = pgTable(
+  "offboarding_tasks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    requestId: varchar("request_id").notNull(),
+    taskType: text("task_type").notNull(), // 'revoke_sso', 'revoke_oauth', 'transfer_ownership', etc.
+    appId: varchar("app_id"),
+    appName: text("app_name"),
+    status: text("status").notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed', 'skipped'
+    priority: integer("priority").default(0),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    result: jsonb("result").$type<Record<string, any>>(),
+    errorMessage: text("error_message"),
+    retryCount: integer("retry_count").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxRequest: index("idx_offboarding_tasks_request").on(table.requestId),
+    idxStatus: index("idx_offboarding_tasks_status").on(table.status),
+    idxType: index("idx_offboarding_tasks_type").on(table.taskType),
+  })
+);
+
+// HR Integrations Table
+export const hrIntegrations = pgTable(
+  "hr_integrations",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    provider: text("provider").notNull(), // 'bamboohr', 'keka', 'darwinbox'
+    name: text("name").notNull(),
+    config: jsonb("config").$type<Record<string, any>>().notNull(),
+    webhookSecret: text("webhook_secret"),
+    status: text("status").notNull().default('active'), // 'active', 'inactive', 'error'
+    syncEnabled: boolean("sync_enabled").default(true),
+    autoTriggerOffboarding: boolean("auto_trigger_offboarding").default(true),
+    defaultPlaybookId: varchar("default_playbook_id"),
+    lastSyncAt: timestamp("last_sync_at"),
+    syncError: text("sync_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_hr_integrations_tenant").on(table.tenantId),
+    idxProvider: index("idx_hr_integrations_provider").on(table.provider),
+  })
+);
+
+// Validation Schemas for Phase 3
+export const insertOffboardingPlaybookSchema = createInsertSchema(offboardingPlaybooks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOffboardingRequestSchema = createInsertSchema(offboardingRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  initiatedAt: true,
+});
+
+export const insertOffboardingTaskSchema = createInsertSchema(offboardingTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertHrIntegrationSchema = createInsertSchema(hrIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for Phase 3
+export type OffboardingPlaybook = typeof offboardingPlaybooks.$inferSelect;
+export type InsertOffboardingPlaybook = z.infer<typeof insertOffboardingPlaybookSchema>;
+export type OffboardingRequest = typeof offboardingRequests.$inferSelect;
+export type InsertOffboardingRequest = z.infer<typeof insertOffboardingRequestSchema>;
+export type OffboardingTask = typeof offboardingTasks.$inferSelect;
+export type InsertOffboardingTask = z.infer<typeof insertOffboardingTaskSchema>;
+export type HrIntegration = typeof hrIntegrations.$inferSelect;
+export type InsertHrIntegration = z.infer<typeof insertHrIntegrationSchema>;
