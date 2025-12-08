@@ -4,6 +4,7 @@ import { authenticateToken, requireRole } from "../middleware/auth.middleware";
 import { auditLogger, AuditActions, ResourceTypes } from "../audit-logger";
 import { insertSaasContractSchema } from "@shared/schema";
 import { z } from "zod";
+import { policyEngine } from "../services/policy/engine";
 
 const router = Router();
 
@@ -67,6 +68,27 @@ router.get("/renewals", authenticateToken, async (req: Request, res: Response) =
   try {
     const days = parseInt(req.query.days as string) || 30;
     const renewals = await storage.getUpcomingRenewals(req.user!.tenantId, days);
+
+    // Emit policy events for approaching renewals
+    const eventSystem = policyEngine.getEventSystem();
+    for (const renewal of renewals) {
+      if (renewal.renewalDate) {
+        const daysUntilRenewal = Math.ceil(
+          (new Date(renewal.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        );
+
+        eventSystem.emit('contract.renewal_approaching', {
+          tenantId: req.user!.tenantId,
+          contractId: renewal.id,
+          appId: renewal.appId || '',
+          appName: renewal.vendor || 'Unknown',
+          daysUntilRenewal,
+          contractValue: renewal.annualValue || 0,
+          autoRenew: renewal.autoRenew || false
+        });
+      }
+    }
+
     res.json(renewals);
   } catch (error) {
     console.error('Failed to fetch upcoming renewals:', error);

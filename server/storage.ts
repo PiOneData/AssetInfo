@@ -53,6 +53,13 @@ import {
   type InsertSaasInvoice,
   type GovernancePolicy,
   type InsertGovernancePolicy,
+  // Phase 4 types
+  type AutomatedPolicy,
+  type InsertAutomatedPolicy,
+  type PolicyExecution,
+  type InsertPolicyExecution,
+  type PolicyTemplate,
+  type InsertPolicyTemplate,
   users,
   tenants,
   assets,
@@ -78,7 +85,11 @@ import {
   oauthTokens,
   identityProviders,
   saasInvoices,
-  governancePolicies
+  governancePolicies,
+  // Phase 4 tables
+  automatedPolicies,
+  policyExecutions,
+  policyTemplates
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword } from "./services/auth";
@@ -271,6 +282,7 @@ export interface IStorage {
   // SaaS Invoices
   getSaasInvoices(tenantId: string, filters?: {status?: string; appId?: string}): Promise<SaasInvoice[]>;
   getSaasInvoice(id: string, tenantId: string): Promise<SaasInvoice | undefined>;
+  getSaasInvoiceByExternalId(externalId: string, tenantId: string): Promise<SaasInvoice | undefined>;
   createSaasInvoice(invoice: InsertSaasInvoice): Promise<SaasInvoice>;
   updateSaasInvoice(id: string, tenantId: string, invoice: Partial<InsertSaasInvoice>): Promise<SaasInvoice | undefined>;
   deleteSaasInvoice(id: string, tenantId: string): Promise<boolean>;
@@ -282,6 +294,25 @@ export interface IStorage {
   updateGovernancePolicy(id: string, tenantId: string, policy: Partial<InsertGovernancePolicy>): Promise<GovernancePolicy | undefined>;
   deleteGovernancePolicy(id: string, tenantId: string): Promise<boolean>;
   toggleGovernancePolicy(id: string, tenantId: string, enabled: boolean): Promise<GovernancePolicy | undefined>;
+
+  // Automated Policies (Phase 4)
+  getAutomatedPolicies(tenantId: string, filters?: {triggerType?: string; enabled?: boolean}): Promise<AutomatedPolicy[]>;
+  getAutomatedPolicy(id: string, tenantId: string): Promise<AutomatedPolicy | undefined>;
+  createAutomatedPolicy(policy: InsertAutomatedPolicy): Promise<AutomatedPolicy>;
+  updateAutomatedPolicy(id: string, tenantId: string, policy: Partial<InsertAutomatedPolicy>): Promise<AutomatedPolicy | undefined>;
+  deleteAutomatedPolicy(id: string, tenantId: string): Promise<boolean>;
+  updatePolicyStats(id: string, tenantId: string, status: 'success' | 'partial' | 'failed'): Promise<void>;
+
+  // Policy Executions (Phase 4)
+  getPolicyExecutions(tenantId: string, filters?: {policyId?: string; status?: string}): Promise<PolicyExecution[]>;
+  getPolicyExecution(id: string, tenantId: string): Promise<PolicyExecution | undefined>;
+  createPolicyExecution(execution: InsertPolicyExecution): Promise<PolicyExecution>;
+  updatePolicyExecution(id: string, tenantId: string, updates: Partial<InsertPolicyExecution>): Promise<PolicyExecution | undefined>;
+
+  // Policy Templates (Phase 4)
+  getPolicyTemplates(filters?: {category?: string}): Promise<PolicyTemplate[]>;
+  getPolicyTemplate(id: string): Promise<PolicyTemplate | undefined>;
+  incrementTemplatePopularity(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2722,6 +2753,12 @@ export class DatabaseStorage implements IStorage {
     return invoice;
   }
 
+  async getSaasInvoiceByExternalId(externalId: string, tenantId: string): Promise<SaasInvoice | undefined> {
+    const [invoice] = await db.select().from(saasInvoices)
+      .where(and(eq(saasInvoices.externalId, externalId), eq(saasInvoices.tenantId, tenantId)));
+    return invoice;
+  }
+
   async createSaasInvoice(invoice: InsertSaasInvoice): Promise<SaasInvoice> {
     const [created] = await db.insert(saasInvoices).values(invoice).returning();
     return created;
@@ -2786,6 +2823,128 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(governancePolicies.id, id), eq(governancePolicies.tenantId, tenantId)))
       .returning();
     return updated;
+  }
+
+  // Automated Policies (Phase 4)
+  async getAutomatedPolicies(tenantId: string, filters?: {triggerType?: string; enabled?: boolean}): Promise<AutomatedPolicy[]> {
+    const conditions = [eq(automatedPolicies.tenantId, tenantId)];
+
+    if (filters?.triggerType) {
+      conditions.push(eq(automatedPolicies.triggerType, filters.triggerType));
+    }
+    if (filters?.enabled !== undefined) {
+      conditions.push(eq(automatedPolicies.enabled, filters.enabled));
+    }
+
+    return db.select().from(automatedPolicies)
+      .where(and(...conditions))
+      .orderBy(desc(automatedPolicies.priority), desc(automatedPolicies.createdAt));
+  }
+
+  async getAutomatedPolicy(id: string, tenantId: string): Promise<AutomatedPolicy | undefined> {
+    const [policy] = await db.select().from(automatedPolicies)
+      .where(and(eq(automatedPolicies.id, id), eq(automatedPolicies.tenantId, tenantId)));
+    return policy;
+  }
+
+  async createAutomatedPolicy(policy: InsertAutomatedPolicy): Promise<AutomatedPolicy> {
+    const [created] = await db.insert(automatedPolicies).values(policy).returning();
+    return created;
+  }
+
+  async updateAutomatedPolicy(id: string, tenantId: string, policy: Partial<InsertAutomatedPolicy>): Promise<AutomatedPolicy | undefined> {
+    const [updated] = await db.update(automatedPolicies)
+      .set({ ...policy, updatedAt: new Date() })
+      .where(and(eq(automatedPolicies.id, id), eq(automatedPolicies.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteAutomatedPolicy(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(automatedPolicies)
+      .where(and(eq(automatedPolicies.id, id), eq(automatedPolicies.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updatePolicyStats(id: string, tenantId: string, status: 'success' | 'partial' | 'failed'): Promise<void> {
+    const policy = await this.getAutomatedPolicy(id, tenantId);
+    if (!policy) return;
+
+    const updates: Partial<InsertAutomatedPolicy> = {
+      executionCount: (policy.executionCount || 0) + 1,
+      lastExecutedAt: new Date()
+    };
+
+    if (status === 'success') {
+      updates.successCount = (policy.successCount || 0) + 1;
+    } else {
+      updates.failureCount = (policy.failureCount || 0) + 1;
+    }
+
+    await this.updateAutomatedPolicy(id, tenantId, updates);
+  }
+
+  // Policy Executions (Phase 4)
+  async getPolicyExecutions(tenantId: string, filters?: {policyId?: string; status?: string}): Promise<PolicyExecution[]> {
+    const conditions = [eq(policyExecutions.tenantId, tenantId)];
+
+    if (filters?.policyId) {
+      conditions.push(eq(policyExecutions.policyId, filters.policyId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(policyExecutions.status, filters.status));
+    }
+
+    return db.select().from(policyExecutions)
+      .where(and(...conditions))
+      .orderBy(desc(policyExecutions.createdAt))
+      .limit(100); // Limit to recent 100 executions
+  }
+
+  async getPolicyExecution(id: string, tenantId: string): Promise<PolicyExecution | undefined> {
+    const [execution] = await db.select().from(policyExecutions)
+      .where(and(eq(policyExecutions.id, id), eq(policyExecutions.tenantId, tenantId)));
+    return execution;
+  }
+
+  async createPolicyExecution(execution: InsertPolicyExecution): Promise<PolicyExecution> {
+    const [created] = await db.insert(policyExecutions).values(execution).returning();
+    return created;
+  }
+
+  async updatePolicyExecution(id: string, tenantId: string, updates: Partial<InsertPolicyExecution>): Promise<PolicyExecution | undefined> {
+    const [updated] = await db.update(policyExecutions)
+      .set(updates)
+      .where(and(eq(policyExecutions.id, id), eq(policyExecutions.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Policy Templates (Phase 4)
+  async getPolicyTemplates(filters?: {category?: string}): Promise<PolicyTemplate[]> {
+    const conditions = [];
+
+    if (filters?.category) {
+      conditions.push(eq(policyTemplates.category, filters.category));
+    }
+
+    const query = conditions.length > 0
+      ? db.select().from(policyTemplates).where(and(...conditions))
+      : db.select().from(policyTemplates);
+
+    return query.orderBy(desc(policyTemplates.popularity), policyTemplates.name);
+  }
+
+  async getPolicyTemplate(id: string): Promise<PolicyTemplate | undefined> {
+    const [template] = await db.select().from(policyTemplates)
+      .where(eq(policyTemplates.id, id));
+    return template;
+  }
+
+  async incrementTemplatePopularity(id: string): Promise<void> {
+    await db.update(policyTemplates)
+      .set({ popularity: sql`${policyTemplates.popularity} + 1` })
+      .where(eq(policyTemplates.id, id));
   }
 }
 

@@ -1433,3 +1433,333 @@ export type SaasInvoice = typeof saasInvoices.$inferSelect;
 export type InsertSaasInvoice = z.infer<typeof insertSaasInvoiceSchema>;
 export type GovernancePolicy = typeof governancePolicies.$inferSelect;
 export type InsertGovernancePolicy = z.infer<typeof insertGovernancePolicySchema>;
+
+// ========================================
+// Phase 3: Offboarding Automation
+// ========================================
+
+// Offboarding Playbooks Table
+export const offboardingPlaybooks = pgTable(
+  "offboarding_playbooks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    name: text("name").notNull(),
+    type: text("type").notNull(), // 'standard', 'contractor', 'transfer', 'role_change'
+    description: text("description"),
+    isDefault: boolean("is_default").default(false),
+    steps: jsonb("steps").$type<Array<{
+      type: string;
+      priority: number;
+      enabled: boolean;
+      description: string;
+    }>>().notNull(),
+    createdBy: varchar("created_by").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_offboarding_playbooks_tenant").on(table.tenantId),
+    idxType: index("idx_offboarding_playbooks_type").on(table.type),
+  })
+);
+
+// Offboarding Requests Table
+export const offboardingRequests = pgTable(
+  "offboarding_requests",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    playbookId: varchar("playbook_id"),
+    status: text("status").notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed', 'partial', 'cancelled'
+    initiatedBy: varchar("initiated_by").notNull(),
+    initiatedAt: timestamp("initiated_at").defaultNow(),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    totalTasks: integer("total_tasks").default(0),
+    completedTasks: integer("completed_tasks").default(0),
+    failedTasks: integer("failed_tasks").default(0),
+    reason: text("reason"),
+    transferToUserId: varchar("transfer_to_user_id"),
+    notes: text("notes"),
+    auditReportUrl: text("audit_report_url"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_offboarding_requests_tenant").on(table.tenantId),
+    idxUser: index("idx_offboarding_requests_user").on(table.userId),
+    idxStatus: index("idx_offboarding_requests_status").on(table.status),
+    idxInitiatedAt: index("idx_offboarding_requests_initiated_at").on(table.initiatedAt),
+  })
+);
+
+// Offboarding Tasks Table
+export const offboardingTasks = pgTable(
+  "offboarding_tasks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    requestId: varchar("request_id").notNull(),
+    taskType: text("task_type").notNull(), // 'revoke_sso', 'revoke_oauth', 'transfer_ownership', etc.
+    appId: varchar("app_id"),
+    appName: text("app_name"),
+    status: text("status").notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'failed', 'skipped'
+    priority: integer("priority").default(0),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    result: jsonb("result").$type<Record<string, any>>(),
+    errorMessage: text("error_message"),
+    retryCount: integer("retry_count").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxRequest: index("idx_offboarding_tasks_request").on(table.requestId),
+    idxStatus: index("idx_offboarding_tasks_status").on(table.status),
+    idxType: index("idx_offboarding_tasks_type").on(table.taskType),
+  })
+);
+
+// HR Integrations Table
+export const hrIntegrations = pgTable(
+  "hr_integrations",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    provider: text("provider").notNull(), // 'bamboohr', 'keka', 'darwinbox'
+    name: text("name").notNull(),
+    config: jsonb("config").$type<Record<string, any>>().notNull(),
+    webhookSecret: text("webhook_secret"),
+    status: text("status").notNull().default('active'), // 'active', 'inactive', 'error'
+    syncEnabled: boolean("sync_enabled").default(true),
+    autoTriggerOffboarding: boolean("auto_trigger_offboarding").default(true),
+    defaultPlaybookId: varchar("default_playbook_id"),
+    lastSyncAt: timestamp("last_sync_at"),
+    syncError: text("sync_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_hr_integrations_tenant").on(table.tenantId),
+    idxProvider: index("idx_hr_integrations_provider").on(table.provider),
+  })
+);
+
+// Validation Schemas for Phase 3
+export const insertOffboardingPlaybookSchema = createInsertSchema(offboardingPlaybooks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOffboardingRequestSchema = createInsertSchema(offboardingRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  initiatedAt: true,
+});
+
+export const insertOffboardingTaskSchema = createInsertSchema(offboardingTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertHrIntegrationSchema = createInsertSchema(hrIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for Phase 3
+export type OffboardingPlaybook = typeof offboardingPlaybooks.$inferSelect;
+export type InsertOffboardingPlaybook = z.infer<typeof insertOffboardingPlaybookSchema>;
+export type OffboardingRequest = typeof offboardingRequests.$inferSelect;
+export type InsertOffboardingRequest = z.infer<typeof insertOffboardingRequestSchema>;
+export type OffboardingTask = typeof offboardingTasks.$inferSelect;
+export type InsertOffboardingTask = z.infer<typeof insertOffboardingTaskSchema>;
+export type HrIntegration = typeof hrIntegrations.$inferSelect;
+export type InsertHrIntegration = z.infer<typeof insertHrIntegrationSchema>;
+
+// ========================================
+// Phase 4: Policy Automation Engine
+// ========================================
+
+// Automated Policies Table
+export const automatedPolicies = pgTable(
+  "automated_policies",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    enabled: boolean("enabled").default(true),
+    priority: integer("priority").default(0),
+
+    // Trigger (IF)
+    triggerType: text("trigger_type").notNull(),
+    triggerConfig: jsonb("trigger_config").$type<Record<string, any>>().notNull(),
+
+    // Conditions
+    conditions: jsonb("conditions").$type<Record<string, any>>(),
+
+    // Actions (THEN)
+    actions: jsonb("actions").$type<Array<{
+      type: string;
+      config: Record<string, any>;
+    }>>().notNull(),
+
+    // Execution settings
+    cooldownMinutes: integer("cooldown_minutes").default(0),
+    maxExecutionsPerDay: integer("max_executions_per_day"),
+    requireApproval: boolean("require_approval").default(false),
+
+    // Statistics
+    executionCount: integer("execution_count").default(0),
+    successCount: integer("success_count").default(0),
+    failureCount: integer("failure_count").default(0),
+    lastExecutedAt: timestamp("last_executed_at"),
+
+    // Metadata
+    createdBy: varchar("created_by").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_automated_policies_tenant").on(table.tenantId),
+    idxTrigger: index("idx_automated_policies_trigger").on(table.triggerType, table.enabled),
+    idxTenantEnabled: index("idx_automated_policies_tenant_enabled").on(table.tenantId, table.enabled),
+  })
+);
+
+// Policy Executions Table
+export const policyExecutions = pgTable(
+  "policy_executions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    policyId: varchar("policy_id").notNull(),
+
+    // Trigger context
+    triggerEvent: text("trigger_event").notNull(),
+    triggerData: jsonb("trigger_data").$type<Record<string, any>>().notNull(),
+
+    // Execution details
+    status: text("status").notNull().default('pending'),
+    startedAt: timestamp("started_at").defaultNow(),
+    completedAt: timestamp("completed_at"),
+
+    // Actions executed
+    actionsExecuted: integer("actions_executed").default(0),
+    actionsSucceeded: integer("actions_succeeded").default(0),
+    actionsFailed: integer("actions_failed").default(0),
+
+    // Results
+    result: jsonb("result").$type<Record<string, any>>(),
+    errorMessage: text("error_message"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_policy_executions_tenant").on(table.tenantId),
+    idxPolicy: index("idx_policy_executions_policy").on(table.policyId),
+    idxStatus: index("idx_policy_executions_status").on(table.status),
+    idxCreated: index("idx_policy_executions_created").on(table.createdAt),
+  })
+);
+
+// Policy Templates Table
+export const policyTemplates = pgTable(
+  "policy_templates",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    description: text("description").notNull(),
+    icon: text("icon"),
+
+    // Template configuration
+    triggerType: text("trigger_type").notNull(),
+    triggerConfig: jsonb("trigger_config").$type<Record<string, any>>().notNull(),
+    conditions: jsonb("conditions").$type<Record<string, any>>(),
+    actions: jsonb("actions").$type<Array<{
+      type: string;
+      config: Record<string, any>;
+    }>>().notNull(),
+
+    // Metadata
+    isSystem: boolean("is_system").default(false),
+    popularity: integer("popularity").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    idxCategory: index("idx_policy_templates_category").on(table.category),
+    idxPopularity: index("idx_policy_templates_popularity").on(table.popularity),
+  })
+);
+
+// Policy Approvals Table
+export const policyApprovals = pgTable(
+  "policy_approvals",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    executionId: varchar("execution_id").notNull(),
+    policyId: varchar("policy_id").notNull(),
+
+    status: text("status").notNull().default('pending'),
+    requestedAt: timestamp("requested_at").defaultNow(),
+    requestedBy: varchar("requested_by"),
+
+    approvedBy: varchar("approved_by"),
+    approvedAt: timestamp("approved_at"),
+    approvalNotes: text("approval_notes"),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_policy_approvals_tenant").on(table.tenantId),
+    idxStatus: index("idx_policy_approvals_status").on(table.status),
+    idxExecution: index("idx_policy_approvals_execution").on(table.executionId),
+  })
+);
+
+// Validation Schemas for Phase 4
+export const insertAutomatedPolicySchema = createInsertSchema(automatedPolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  executionCount: true,
+  successCount: true,
+  failureCount: true,
+  lastExecutedAt: true,
+});
+
+export const insertPolicyExecutionSchema = createInsertSchema(policyExecutions).omit({
+  id: true,
+  createdAt: true,
+  startedAt: true,
+});
+
+export const insertPolicyTemplateSchema = createInsertSchema(policyTemplates).omit({
+  id: true,
+  createdAt: true,
+  popularity: true,
+});
+
+export const insertPolicyApprovalSchema = createInsertSchema(policyApprovals).omit({
+  id: true,
+  createdAt: true,
+  requestedAt: true,
+});
+
+// Types for Phase 4
+export type AutomatedPolicy = typeof automatedPolicies.$inferSelect;
+export type InsertAutomatedPolicy = z.infer<typeof insertAutomatedPolicySchema>;
+export type PolicyExecution = typeof policyExecutions.$inferSelect;
+export type InsertPolicyExecution = z.infer<typeof insertPolicyExecutionSchema>;
+export type PolicyTemplate = typeof policyTemplates.$inferSelect;
+export type InsertPolicyTemplate = z.infer<typeof insertPolicyTemplateSchema>;
+export type PolicyApproval = typeof policyApprovals.$inferSelect;
+export type InsertPolicyApproval = z.infer<typeof insertPolicyApprovalSchema>;
