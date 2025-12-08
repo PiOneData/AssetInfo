@@ -34,6 +34,8 @@ import discoveryRoutes from "./discovery.routes";
 import spendRoutes from "./spend.routes";
 // Phase 3: Offboarding Automation
 import offboardingRoutes from "./offboarding.routes";
+// Phase 4: Policy Automation Engine
+import policyRoutes from "./policy.routes";
 // All routes have been migrated from routes.legacy.ts
 
 /**
@@ -88,7 +90,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 
   // ========================================
-  // SAAS GOVERNANCE ROUTES (Phase 0 & Phase 1 & Phase 2 & Phase 3)
+  // SAAS GOVERNANCE ROUTES (Phase 0-4)
   // ========================================
   app.use("/api/saas-apps", saasAppsRoutes);           // 8 routes - SaaS app management
   app.use("/api/saas-contracts", saasContractsRoutes); // 7 routes - Contract management
@@ -97,6 +99,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/discovery", discoveryRoutes);          // 6 routes - Discovery dashboard (Phase 1)
   app.use("/api/spend", spendRoutes);                  // 7 routes - Spend management (Phase 2)
   app.use("/api/offboarding", offboardingRoutes);      // 12 routes - Offboarding automation (Phase 3)
+  app.use("/api/policies", policyRoutes);              // 13 routes - Policy automation engine (Phase 4)
 
   // SPECIAL ROUTES (Non-API)
   app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
