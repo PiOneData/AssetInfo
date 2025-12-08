@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, decimal, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, decimal, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -874,6 +874,84 @@ export const createEnrollmentTokenSchema = z.object({
 });
 
 // ============================================
+// SaaS Governance Validation Schemas (Phase 0)
+// ============================================
+
+export const insertSaasAppSchema = createInsertSchema(saasApps).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  approvalStatus: z.enum(["pending", "approved", "denied"]).default("pending"),
+  riskScore: z.number().min(0).max(100).default(0),
+  discoveryMethod: z.enum(["idp", "email", "manual", "browser", "network"]).optional(),
+});
+
+export const insertSaasContractSchema = createInsertSchema(saasContracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  billingCycle: z.enum(["monthly", "quarterly", "annual", "usage-based"]).optional(),
+  licenseType: z.enum(["per-user", "per-device", "unlimited", "consumption-based"]).optional(),
+  status: z.enum(["active", "expired", "cancelled", "pending"]).default("active"),
+  currency: z.string().length(3).default("USD"),
+});
+
+export const insertUserAppAccessSchema = createInsertSchema(userAppAccess).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["active", "revoked", "suspended"]).default("active"),
+  assignmentMethod: z.enum(["manual", "sso", "oauth", "discovered"]).optional(),
+});
+
+export const insertOauthTokenSchema = createInsertSchema(oauthTokens).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["active", "expired", "revoked"]).default("active"),
+  riskLevel: z.enum(["low", "medium", "high", "critical"]).default("low"),
+  scopes: z.array(z.string()).min(1),
+});
+
+export const insertIdentityProviderSchema = createInsertSchema(identityProviders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  type: z.enum(["azuread", "okta", "google", "jumpcloud"]),
+  status: z.enum(["active", "disabled", "error"]).default("active"),
+  syncStatus: z.enum(["idle", "syncing", "error"]).default("idle"),
+});
+
+export const insertSaasInvoiceSchema = createInsertSchema(saasInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(["pending", "paid", "overdue", "cancelled"]).default("pending"),
+  paymentMethod: z.enum(["card", "bank_transfer", "check", "other"]).optional(),
+  currency: z.string().length(3).default("USD"),
+});
+
+export const insertGovernancePolicySchema = createInsertSchema(governancePolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  policyType: z.enum([
+    "approval",
+    "license_reclaim",
+    "risk_blocking",
+    "renewal_alert",
+    "offboarding"
+  ]),
+});
+
+// ============================================
 // Network Monitoring Tables
 // ============================================
 
@@ -935,6 +1013,394 @@ export const unknownDeviceAlerts = pgTable("unknown_device_alerts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ============================================================================
+// SaaS Governance Tables (Phase 0)
+// ============================================================================
+
+// SaaS Apps - Central registry of all SaaS applications
+export const saasApps = pgTable(
+  "saas_apps",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // Basic information
+    name: text("name").notNull(),
+    vendor: text("vendor"),
+    description: text("description"),
+    category: text("category"),
+
+    // URLs and integration
+    websiteUrl: text("website_url"),
+    logoUrl: text("logo_url"),
+    apiUrl: text("api_url"),
+
+    // Governance
+    approvalStatus: text("approval_status").notNull().default("pending"),
+    riskScore: integer("risk_score").default(0),
+    riskFactors: jsonb("risk_factors").$type<string[]>(),
+
+    // Usage tracking
+    userCount: integer("user_count").default(0),
+    activeUserCount: integer("active_user_count").default(0),
+    lastUsedAt: timestamp("last_used_at"),
+
+    // Ownership
+    owner: text("owner"),
+    ownerId: varchar("owner_id"),
+    primaryContactEmail: text("primary_contact_email"),
+
+    // Discovery metadata
+    discoveryMethod: text("discovery_method"),
+    discoveryDate: timestamp("discovery_date"),
+    discoveredByUserId: varchar("discovered_by_user_id"),
+
+    // Additional metadata
+    tags: jsonb("tags").$type<string[]>(),
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    notes: text("notes"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    uniqueTenantName: uniqueIndex("uniq_saas_apps_tenant_name").on(table.tenantId, table.name),
+    idxTenantStatus: index("idx_saas_apps_tenant_status").on(table.tenantId, table.approvalStatus),
+    idxTenantCategory: index("idx_saas_apps_tenant_category").on(table.tenantId, table.category),
+    idxRiskScore: index("idx_saas_apps_risk_score").on(table.tenantId, table.riskScore),
+  })
+);
+
+// SaaS Contracts - Contract & subscription management
+export const saasContracts = pgTable(
+  "saas_contracts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    appId: varchar("app_id").notNull(),
+
+    // Contract details
+    contractNumber: text("contract_number"),
+    vendor: text("vendor").notNull(),
+
+    // Financial
+    annualValue: decimal("annual_value", { precision: 12, scale: 2 }),
+    currency: text("currency").notNull().default("USD"),
+    billingCycle: text("billing_cycle"),
+    paymentTerms: text("payment_terms"),
+
+    // Dates
+    startDate: timestamp("start_date"),
+    endDate: timestamp("end_date"),
+    renewalDate: timestamp("renewal_date"),
+    noticePeriodDays: integer("notice_period_days"),
+
+    // Auto-renewal
+    autoRenew: boolean("auto_renew").default(false),
+    renewalAlerted: boolean("renewal_alerted").default(false),
+
+    // Contract terms
+    terms: text("terms"),
+    terminationClause: text("termination_clause"),
+
+    // License details
+    licenseType: text("license_type"),
+    totalLicenses: integer("total_licenses"),
+    usedLicenses: integer("used_licenses").default(0),
+
+    // Document management
+    contractFileUrl: text("contract_file_url"),
+    signedBy: text("signed_by"),
+    signedDate: timestamp("signed_date"),
+
+    // Ownership
+    owner: text("owner"),
+    ownerId: varchar("owner_id"),
+
+    // Status
+    status: text("status").notNull().default("active"),
+
+    // Additional metadata
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    notes: text("notes"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenantApp: index("idx_saas_contracts_tenant_app").on(table.tenantId, table.appId),
+    idxTenantStatus: index("idx_saas_contracts_tenant_status").on(table.tenantId, table.status),
+    idxRenewalDate: index("idx_saas_contracts_renewal_date").on(table.renewalDate),
+    idxTenantRenewalDate: index("idx_saas_contracts_tenant_renewal").on(table.tenantId, table.renewalDate),
+  })
+);
+
+// User App Access - User–App relationship graph
+export const userAppAccess = pgTable(
+  "user_app_access",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    appId: varchar("app_id").notNull(),
+
+    // Access details
+    accessGrantedDate: timestamp("access_granted_date").defaultNow(),
+    lastAccessDate: timestamp("last_access_date"),
+    accessRevokedDate: timestamp("access_revoked_date"),
+
+    // Permissions
+    permissions: jsonb("permissions").$type<string[]>(),
+    roles: jsonb("roles").$type<string[]>(),
+
+    // OAuth context
+    hasOAuthToken: boolean("has_oauth_token").default(false),
+    oauthScopes: jsonb("oauth_scopes").$type<string[]>(),
+
+    // Assignment tracking
+    assignedBy: varchar("assigned_by"),
+    assignmentMethod: text("assignment_method"),
+
+    // Status
+    status: text("status").notNull().default("active"),
+
+    // Usage tracking
+    loginCount: integer("login_count").default(0),
+    lastLoginAt: timestamp("last_login_at"),
+
+    // Metadata
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    notes: text("notes"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    uniqueTenantUserApp: uniqueIndex("uniq_user_app_access_tenant_user_app").on(
+      table.tenantId,
+      table.userId,
+      table.appId
+    ),
+    idxTenantUser: index("idx_user_app_access_tenant_user").on(table.tenantId, table.userId),
+    idxTenantApp: index("idx_user_app_access_tenant_app").on(table.tenantId, table.appId),
+    idxStatus: index("idx_user_app_access_status").on(table.tenantId, table.status),
+  })
+);
+
+// OAuth Tokens - OAuth token tracking for risk analysis
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    appId: varchar("app_id").notNull(),
+
+    // OAuth details
+    tokenHash: text("token_hash"),
+    scopes: jsonb("scopes").$type<string[]>().notNull(),
+    grantType: text("grant_type"),
+
+    // Token lifecycle
+    grantedAt: timestamp("granted_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at"),
+    revokedAt: timestamp("revoked_at"),
+    lastUsedAt: timestamp("last_used_at"),
+
+    // Risk assessment
+    riskLevel: text("risk_level").default("low"),
+    riskReasons: jsonb("risk_reasons").$type<string[]>(),
+
+    // Revocation
+    status: text("status").notNull().default("active"),
+    revokedBy: varchar("revoked_by"),
+    revocationReason: text("revocation_reason"),
+
+    // IdP metadata
+    idpTokenId: text("idp_token_id"),
+    idpMetadata: jsonb("idp_metadata").$type<Record<string, any>>(),
+
+    // Metadata
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenantUserApp: index("idx_oauth_tokens_tenant_user_app").on(table.tenantId, table.userId, table.appId),
+    idxTenantStatus: index("idx_oauth_tokens_tenant_status").on(table.tenantId, table.status),
+    idxRiskLevel: index("idx_oauth_tokens_risk_level").on(table.tenantId, table.riskLevel),
+    idxExpiresAt: index("idx_oauth_tokens_expires_at").on(table.expiresAt),
+  })
+);
+
+// Identity Providers - IdP configuration
+export const identityProviders = pgTable(
+  "identity_providers",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // Provider details
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+
+    // Configuration (clientSecret will be encrypted at application layer)
+    clientId: text("client_id"),
+    clientSecret: text("client_secret"),
+    tenantDomain: text("tenant_domain"),
+
+    // OAuth endpoints
+    authorizationUrl: text("authorization_url"),
+    tokenUrl: text("token_url"),
+    userInfoUrl: text("user_info_url"),
+
+    // Scopes and permissions
+    scopes: jsonb("scopes").$type<string[]>(),
+
+    // Sync configuration
+    syncEnabled: boolean("sync_enabled").default(false),
+    syncInterval: integer("sync_interval").default(3600),
+    lastSyncAt: timestamp("last_sync_at"),
+    nextSyncAt: timestamp("next_sync_at"),
+    syncStatus: text("sync_status").default("idle"),
+    syncError: text("sync_error"),
+
+    // Statistics
+    totalUsers: integer("total_users").default(0),
+    totalApps: integer("total_apps").default(0),
+
+    // Status
+    status: text("status").notNull().default("active"),
+
+    // Configuration metadata
+    config: jsonb("config").$type<Record<string, any>>(),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    uniqueTenantType: uniqueIndex("uniq_identity_providers_tenant_type").on(table.tenantId, table.type),
+    idxTenantStatus: index("idx_identity_providers_tenant_status").on(table.tenantId, table.status),
+    idxNextSync: index("idx_identity_providers_next_sync").on(table.nextSyncAt),
+  })
+);
+
+// SaaS Invoices - Invoice tracking
+export const saasInvoices = pgTable(
+  "saas_invoices",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    appId: varchar("app_id"),
+    contractId: varchar("contract_id"),
+
+    // Invoice details
+    invoiceNumber: text("invoice_number"),
+    vendor: text("vendor").notNull(),
+
+    // Financial
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("USD"),
+    taxAmount: decimal("tax_amount", { precision: 12, scale: 2 }),
+    totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+
+    // Dates
+    invoiceDate: timestamp("invoice_date").notNull(),
+    dueDate: timestamp("due_date"),
+    paidDate: timestamp("paid_date"),
+
+    // Billing period
+    periodStart: timestamp("period_start"),
+    periodEnd: timestamp("period_end"),
+
+    // Status
+    status: text("status").notNull().default("pending"),
+
+    // Payment
+    paymentMethod: text("payment_method"),
+    transactionId: text("transaction_id"),
+
+    // Document
+    invoiceFileUrl: text("invoice_file_url"),
+
+    // External system
+    externalInvoiceId: text("external_invoice_id"),
+
+    // Categorization
+    category: text("category"),
+    department: text("department"),
+    costCenter: text("cost_center"),
+
+    // Metadata
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    notes: text("notes"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenantApp: index("idx_saas_invoices_tenant_app").on(table.tenantId, table.appId),
+    idxTenantStatus: index("idx_saas_invoices_tenant_status").on(table.tenantId, table.status),
+    idxInvoiceDate: index("idx_saas_invoices_invoice_date").on(table.tenantId, table.invoiceDate),
+    idxDueDate: index("idx_saas_invoices_due_date").on(table.dueDate),
+  })
+);
+
+// Governance Policies - Automation policy rules
+export const governancePolicies = pgTable(
+  "governance_policies",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // Policy details
+    name: text("name").notNull(),
+    description: text("description"),
+    policyType: text("policy_type").notNull(),
+
+    // Trigger configuration
+    trigger: jsonb("trigger").$type<{
+      event: string;
+      conditions: Record<string, any>;
+    }>().notNull(),
+
+    // Actions to take
+    actions: jsonb("actions").$type<Array<{
+      type: string;
+      config: Record<string, any>;
+    }>>().notNull(),
+
+    // Execution
+    enabled: boolean("enabled").default(true),
+    priority: integer("priority").default(0),
+
+    // Statistics
+    executionCount: integer("execution_count").default(0),
+    lastExecutedAt: timestamp("last_executed_at"),
+
+    // Owner
+    createdBy: varchar("created_by"),
+
+    // Metadata
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenantType: index("idx_governance_policies_tenant_type").on(table.tenantId, table.policyType),
+    idxTenantEnabled: index("idx_governance_policies_tenant_enabled").on(table.tenantId, table.enabled),
+  })
+);
+
 // Types
 export type DiscoveryJob = typeof discoveryJobs.$inferSelect;
 export type InsertDiscoveryJob = z.infer<typeof insertDiscoveryJobSchema>;
@@ -951,3 +1417,19 @@ export type CreateDiscoveryJob = z.infer<typeof createDiscoveryJobSchema>;
 export type UploadDiscoveryResults = z.infer<typeof uploadDiscoveryResultsSchema>;
 export type ImportDiscoveredDevices = z.infer<typeof importDiscoveredDevicesSchema>;
 export type CreateCredentialProfile = z.infer<typeof createCredentialProfileSchema>;
+
+// SaaS Governance Types
+export type SaasApp = typeof saasApps.$inferSelect;
+export type InsertSaasApp = z.infer<typeof insertSaasAppSchema>;
+export type SaasContract = typeof saasContracts.$inferSelect;
+export type InsertSaasContract = z.infer<typeof insertSaasContractSchema>;
+export type UserAppAccess = typeof userAppAccess.$inferSelect;
+export type InsertUserAppAccess = z.infer<typeof insertUserAppAccessSchema>;
+export type OauthToken = typeof oauthTokens.$inferSelect;
+export type InsertOauthToken = z.infer<typeof insertOauthTokenSchema>;
+export type IdentityProvider = typeof identityProviders.$inferSelect;
+export type InsertIdentityProvider = z.infer<typeof insertIdentityProviderSchema>;
+export type SaasInvoice = typeof saasInvoices.$inferSelect;
+export type InsertSaasInvoice = z.infer<typeof insertSaasInvoiceSchema>;
+export type GovernancePolicy = typeof governancePolicies.$inferSelect;
+export type InsertGovernancePolicy = z.infer<typeof insertGovernancePolicySchema>;
