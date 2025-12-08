@@ -2160,3 +2160,456 @@ export type InsertPrivilegeDriftAlert = z.infer<typeof insertPrivilegeDriftAlert
 export type OverprivilegedAccount = typeof overprivilegedAccounts.$inferSelect;
 export type InsertOverprivilegedAccount = z.infer<typeof insertOverprivilegedAccountSchema>;
 
+// ============================================
+// Phase 6: Advanced Features & AI Intelligence
+// ============================================
+
+// Access Requests (6.1)
+export const accessRequests = pgTable(
+  "access_requests",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    requesterId: varchar("requester_id").notNull(),
+    requesterName: text("requester_name").notNull(),
+    requesterEmail: text("requester_email"),
+    requesterDepartment: text("requester_department"),
+    appId: varchar("app_id").notNull(),
+    appName: text("app_name").notNull(),
+    accessType: text("access_type").notNull(),
+    justification: text("justification").notNull(),
+    durationType: text("duration_type").default("permanent"),
+    durationHours: integer("duration_hours"),
+    expiresAt: timestamp("expires_at"),
+    status: text("status").notNull().default("pending"),
+    approverId: varchar("approver_id"),
+    approverName: text("approver_name"),
+    approvalNotes: text("approval_notes"),
+    reviewedAt: timestamp("reviewed_at"),
+    riskScore: integer("risk_score").default(0),
+    riskLevel: text("risk_level"),
+    riskFactors: jsonb("risk_factors").$type<string[]>(),
+    sodConflicts: jsonb("sod_conflicts").$type<any[]>(),
+    provisioningStatus: text("provisioning_status").default("pending"),
+    provisionedAt: timestamp("provisioned_at"),
+    provisioningError: text("provisioning_error"),
+    slaDueAt: timestamp("sla_due_at"),
+    isOverdue: boolean("is_overdue").default(false),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_access_requests_tenant").on(table.tenantId),
+    idxRequester: index("idx_access_requests_requester").on(table.requesterId, table.status),
+    idxApprover: index("idx_access_requests_approver").on(table.approverId, table.status),
+    idxStatus: index("idx_access_requests_status").on(table.tenantId, table.status),
+  })
+);
+
+// JIT Access Sessions (6.2)
+export const jitAccessSessions = pgTable(
+  "jit_access_sessions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    appId: varchar("app_id").notNull(),
+    appName: text("app_name").notNull(),
+    accessType: text("access_type").notNull(),
+    previousAccessType: text("previous_access_type"),
+    justification: text("justification").notNull(),
+    durationHours: integer("duration_hours").notNull(),
+    startsAt: timestamp("starts_at").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    requiresApproval: boolean("requires_approval").default(true),
+    approvedBy: varchar("approved_by"),
+    approvedAt: timestamp("approved_at"),
+    mfaVerified: boolean("mfa_verified").default(false),
+    mfaVerifiedAt: timestamp("mfa_verified_at"),
+    status: text("status").notNull().default("pending"),
+    activatedAt: timestamp("activated_at"),
+    revokedAt: timestamp("revoked_at"),
+    revokedBy: varchar("revoked_by"),
+    revokeReason: text("revoke_reason"),
+    accessCount: integer("access_count").default(0),
+    lastAccessAt: timestamp("last_access_at"),
+    extensionRequested: boolean("extension_requested").default(false),
+    extensionApproved: boolean("extension_approved").default(false),
+    extendedByHours: integer("extended_by_hours"),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_jit_sessions_tenant").on(table.tenantId),
+    idxUser: index("idx_jit_sessions_user").on(table.userId, table.status),
+    idxStatus: index("idx_jit_sessions_status").on(table.tenantId, table.status),
+  })
+);
+
+// SoD Rules (6.3)
+export const sodRules = pgTable(
+  "sod_rules",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    severity: text("severity").notNull(),
+    appId1: varchar("app_id_1").notNull(),
+    appName1: text("app_name_1").notNull(),
+    accessType1: text("access_type_1"),
+    appId2: varchar("app_id_2").notNull(),
+    appName2: text("app_name_2").notNull(),
+    accessType2: text("access_type_2"),
+    complianceFramework: text("compliance_framework"),
+    rationale: text("rationale"),
+    exemptedUsers: jsonb("exempted_users").$type<string[]>(),
+    isActive: boolean("is_active").default(true),
+    createdBy: varchar("created_by").notNull(),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_sod_rules_tenant").on(table.tenantId),
+    idxApps: index("idx_sod_rules_apps").on(table.appId1, table.appId2),
+  })
+);
+
+// SoD Violations (6.3)
+export const sodViolations = pgTable(
+  "sod_violations",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    userDepartment: text("user_department"),
+    sodRuleId: varchar("sod_rule_id").notNull(),
+    ruleName: text("rule_name").notNull(),
+    severity: text("severity").notNull(),
+    app1Id: varchar("app_1_id").notNull(),
+    app1Name: text("app_1_name").notNull(),
+    accessType1: text("access_type_1"),
+    app2Id: varchar("app_2_id").notNull(),
+    app2Name: text("app_2_name").notNull(),
+    accessType2: text("access_type_2"),
+    riskScore: integer("risk_score").default(0),
+    riskFactors: jsonb("risk_factors").$type<string[]>(),
+    recommendedAction: text("recommended_action"),
+    remediationPlan: text("remediation_plan"),
+    status: text("status").notNull().default("open"),
+    resolvedBy: varchar("resolved_by"),
+    resolvedAt: timestamp("resolved_at"),
+    resolutionNotes: text("resolution_notes"),
+    detectedAt: timestamp("detected_at").default(sql`NOW()`),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_sod_violations_tenant").on(table.tenantId),
+    idxUser: index("idx_sod_violations_user").on(table.userId, table.status),
+    idxRule: index("idx_sod_violations_rule").on(table.sodRuleId),
+    idxStatus: index("idx_sod_violations_status").on(table.tenantId, table.status),
+  })
+);
+
+// Review Suggestions (6.4)
+export const reviewSuggestions = pgTable(
+  "review_suggestions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    reviewItemId: varchar("review_item_id").notNull(),
+    campaignId: varchar("campaign_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    appId: varchar("app_id").notNull(),
+    appName: text("app_name").notNull(),
+    predictedDecision: text("predicted_decision").notNull(),
+    confidenceScore: decimal("confidence_score", { precision: 5, scale: 2 }).notNull(),
+    factors: jsonb("factors").$type<Array<{ factor: string; weight: number; explanation: string }>>().notNull(),
+    similarCases: jsonb("similar_cases").$type<Array<{ userId: string; appId: string; decision: string; similarity: number }>>(),
+    modelVersion: text("model_version"),
+    modelTrainedAt: timestamp("model_trained_at"),
+    featuresUsed: jsonb("features_used").$type<string[]>(),
+    actualDecision: text("actual_decision"),
+    wasCorrect: boolean("was_correct"),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_review_suggestions_tenant").on(table.tenantId),
+    idxCampaign: index("idx_review_suggestions_campaign").on(table.campaignId),
+    idxItem: index("idx_review_suggestions_item").on(table.reviewItemId),
+  })
+);
+
+// Anomaly Detections (6.5)
+export const anomalyDetections = pgTable(
+  "anomaly_detections",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    userDepartment: text("user_department"),
+    anomalyType: text("anomaly_type").notNull(),
+    severity: text("severity").notNull(),
+    confidenceScore: decimal("confidence_score", { precision: 5, scale: 2 }).notNull(),
+    appId: varchar("app_id"),
+    appName: text("app_name"),
+    eventType: text("event_type"),
+    eventCount: integer("event_count"),
+    eventTime: timestamp("event_time"),
+    baselineValue: decimal("baseline_value", { precision: 10, scale: 2 }),
+    actualValue: decimal("actual_value", { precision: 10, scale: 2 }),
+    deviationPercent: decimal("deviation_percent", { precision: 10, scale: 2 }),
+    locationCountry: text("location_country"),
+    locationCity: text("location_city"),
+    ipAddress: text("ip_address"),
+    isNewLocation: boolean("is_new_location").default(false),
+    riskScore: integer("risk_score").default(0),
+    riskFactors: jsonb("risk_factors").$type<string[]>(),
+    status: text("status").notNull().default("open"),
+    investigatedBy: varchar("investigated_by"),
+    investigatedAt: timestamp("investigated_at"),
+    investigationNotes: text("investigation_notes"),
+    actionTaken: text("action_taken"),
+    actionAt: timestamp("action_at"),
+    detectedAt: timestamp("detected_at").default(sql`NOW()`),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_anomaly_detections_tenant").on(table.tenantId),
+    idxUser: index("idx_anomaly_detections_user").on(table.userId, table.status),
+    idxType: index("idx_anomaly_detections_type").on(table.tenantId, table.anomalyType, table.severity),
+    idxStatus: index("idx_anomaly_detections_status").on(table.tenantId, table.status),
+    idxDetected: index("idx_anomaly_detections_detected").on(table.detectedAt),
+  })
+);
+
+// Peer Group Baselines (6.6)
+export const peerGroupBaselines = pgTable(
+  "peer_group_baselines",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    department: text("department").notNull(),
+    jobTitle: text("job_title"),
+    jobLevel: text("job_level"),
+    groupSize: integer("group_size").notNull(),
+    commonApps: jsonb("common_apps").$type<Array<{ appId: string; appName: string; percentage: number; accessType: string }>>().notNull(),
+    averageAppCount: decimal("average_app_count", { precision: 5, scale: 2 }),
+    stdDevAppCount: decimal("std_dev_app_count", { precision: 5, scale: 2 }),
+    analyzedAt: timestamp("analyzed_at").notNull(),
+    nextAnalysisAt: timestamp("next_analysis_at"),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_peer_baselines_tenant").on(table.tenantId),
+    idxGroup: index("idx_peer_baselines_group").on(table.tenantId, table.department, table.jobTitle, table.jobLevel),
+  })
+);
+
+// Peer Group Outliers (6.6)
+export const peerGroupOutliers = pgTable(
+  "peer_group_outliers",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    userDepartment: text("user_department"),
+    userJobTitle: text("user_job_title"),
+    userJobLevel: text("user_job_level"),
+    peerGroupId: varchar("peer_group_id").notNull(),
+    outlierType: text("outlier_type").notNull(),
+    deviationScore: decimal("deviation_score", { precision: 10, scale: 2 }).notNull(),
+    excessApps: jsonb("excess_apps").$type<Array<{ appId: string; appName: string }>>(),
+    missingApps: jsonb("missing_apps").$type<Array<{ appId: string; appName: string }>>(),
+    totalAppCount: integer("total_app_count"),
+    peerAverageAppCount: decimal("peer_average_app_count", { precision: 5, scale: 2 }),
+    recommendedAdditions: jsonb("recommended_additions").$type<Array<{ appId: string; appName: string }>>(),
+    recommendedRemovals: jsonb("recommended_removals").$type<Array<{ appId: string; appName: string }>>(),
+    justification: text("justification"),
+    status: text("status").notNull().default("open"),
+    reviewedBy: varchar("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewNotes: text("review_notes"),
+    detectedAt: timestamp("detected_at").default(sql`NOW()`),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_peer_outliers_tenant").on(table.tenantId),
+    idxUser: index("idx_peer_outliers_user").on(table.userId, table.status),
+    idxGroup: index("idx_peer_outliers_group").on(table.peerGroupId),
+    idxStatus: index("idx_peer_outliers_status").on(table.tenantId, table.status),
+  })
+);
+
+// Certification Schedules (6.7)
+export const certificationSchedules = pgTable(
+  "certification_schedules",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    appId: varchar("app_id").notNull(),
+    appName: text("app_name").notNull(),
+    accessType: text("access_type"),
+    riskLevel: text("risk_level").notNull(),
+    reviewFrequency: text("review_frequency").notNull(),
+    frequencyReason: text("frequency_reason"),
+    lastReviewedAt: timestamp("last_reviewed_at"),
+    nextReviewAt: timestamp("next_review_at").notNull(),
+    isOverdue: boolean("is_overdue").default(false),
+    autoIncludeInCampaigns: boolean("auto_include_in_campaigns").default(true),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_cert_schedules_tenant").on(table.tenantId),
+    idxUser: index("idx_cert_schedules_user").on(table.userId),
+    idxNextReview: index("idx_cert_schedules_next_review").on(table.nextReviewAt),
+  })
+);
+
+// Integration Configs (6.8)
+export const integrationConfigs = pgTable(
+  "integration_configs",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    integrationId: varchar("integration_id").notNull(),
+    integrationName: text("integration_name").notNull(),
+    integrationType: text("integration_type").notNull(),
+    enabled: boolean("enabled").default(false),
+    config: jsonb("config").notNull(),
+    oauthAccessToken: text("oauth_access_token"),
+    oauthRefreshToken: text("oauth_refresh_token"),
+    oauthExpiresAt: timestamp("oauth_expires_at"),
+    lastUsedAt: timestamp("last_used_at"),
+    eventCount: integer("event_count").default(0),
+    errorCount: integer("error_count").default(0),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at"),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+    updatedAt: timestamp("updated_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxTenant: index("idx_integration_configs_tenant").on(table.tenantId),
+    idxType: index("idx_integration_configs_type").on(table.tenantId, table.integrationType),
+  })
+);
+
+// Integration Events (6.8)
+export const integrationEvents = pgTable(
+  "integration_events",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    integrationConfigId: varchar("integration_config_id").notNull(),
+    eventType: text("event_type").notNull(),
+    eventData: jsonb("event_data"),
+    status: text("status").notNull(),
+    responseCode: integer("response_code"),
+    responseBody: text("response_body"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at").default(sql`NOW()`),
+  },
+  (table) => ({
+    idxConfig: index("idx_integration_events_config").on(table.integrationConfigId),
+    idxTenant: index("idx_integration_events_tenant").on(table.tenantId, table.createdAt),
+  })
+);
+
+// Validation schemas for Phase 6
+export const insertAccessRequestSchema = createInsertSchema(accessRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertJitAccessSessionSchema = createInsertSchema(jitAccessSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertSodRuleSchema = createInsertSchema(sodRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertSodViolationSchema = createInsertSchema(sodViolations).omit({
+  id: true,
+  detectedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertReviewSuggestionSchema = createInsertSchema(reviewSuggestions).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertAnomalyDetectionSchema = createInsertSchema(anomalyDetections).omit({
+  id: true,
+  detectedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertPeerGroupBaselineSchema = createInsertSchema(peerGroupBaselines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertPeerGroupOutlierSchema = createInsertSchema(peerGroupOutliers).omit({
+  id: true,
+  detectedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertCertificationScheduleSchema = createInsertSchema(certificationSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertIntegrationConfigSchema = createInsertSchema(integrationConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertIntegrationEventSchema = createInsertSchema(integrationEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for Phase 6
+export type AccessRequest = typeof accessRequests.$inferSelect;
+export type InsertAccessRequest = z.infer<typeof insertAccessRequestSchema>;
+export type JitAccessSession = typeof jitAccessSessions.$inferSelect;
+export type InsertJitAccessSession = z.infer<typeof insertJitAccessSessionSchema>;
+export type SodRule = typeof sodRules.$inferSelect;
+export type InsertSodRule = z.infer<typeof insertSodRuleSchema>;
+export type SodViolation = typeof sodViolations.$inferSelect;
+export type InsertSodViolation = z.infer<typeof insertSodViolationSchema>;
+export type ReviewSuggestion = typeof reviewSuggestions.$inferSelect;
+export type InsertReviewSuggestion = z.infer<typeof insertReviewSuggestionSchema>;
+export type AnomalyDetection = typeof anomalyDetections.$inferSelect;
+export type InsertAnomalyDetection = z.infer<typeof insertAnomalyDetectionSchema>;
+export type PeerGroupBaseline = typeof peerGroupBaselines.$inferSelect;
+export type InsertPeerGroupBaseline = z.infer<typeof insertPeerGroupBaselineSchema>;
+export type PeerGroupOutlier = typeof peerGroupOutliers.$inferSelect;
+export type InsertPeerGroupOutlier = z.infer<typeof insertPeerGroupOutlierSchema>;
+export type CertificationSchedule = typeof certificationSchedules.$inferSelect;
+export type InsertCertificationSchedule = z.infer<typeof insertCertificationScheduleSchema>;
+export type IntegrationConfig = typeof integrationConfigs.$inferSelect;
+export type InsertIntegrationConfig = z.infer<typeof insertIntegrationConfigSchema>;
+export type IntegrationEvent = typeof integrationEvents.$inferSelect;
+export type InsertIntegrationEvent = z.infer<typeof insertIntegrationEventSchema>;
+
