@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import * as s from "@db/schema";
+import * as s from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
 import { buildMinimalOAXml, oaSubmitDeviceXML, oaFindDeviceId } from "../utils/openAuditClient";

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import * as s from "@db/schema";
+import * as s from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { oaFetchDeviceSoftware } from "../utils/openAuditClient";

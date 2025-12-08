@@ -2,12 +2,12 @@
 import axios, { AxiosRequestConfig } from "axios";
 
 /** ---- ENV (loaded by server bootstrap via dotenv) ---- */
-export const OA_BASE_URL = process.env.OA_BASE_URL!;
-const OA_USERNAME = process.env.OA_USERNAME!;
-const OA_PASSWORD = process.env.OA_PASSWORD!;
+export const OA_BASE_URL = process.env.OA_BASE_URL || "";
+const OA_USERNAME = process.env.OA_USERNAME || "";
+const OA_PASSWORD = process.env.OA_PASSWORD || "";
 
 if (!OA_BASE_URL || !OA_USERNAME || !OA_PASSWORD) {
-  throw new Error("Missing OA_* env vars (OA_BASE_URL, OA_USERNAME, OA_PASSWORD).");
+  console.warn("Warning: Missing OA_* env vars (OA_BASE_URL, OA_USERNAME, OA_PASSWORD). OpenAudit integration will not work.");
 }
 
 /** ---- Axios defaults ---- */
