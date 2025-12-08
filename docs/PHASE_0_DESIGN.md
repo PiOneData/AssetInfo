@@ -967,6 +967,9 @@ DROP TABLE IF EXISTS saas_apps;
 
 ### Phase 0.2: API Layer (Week 2)
 
+- [ ] Set up S3/cloud storage configuration
+- [ ] Implement file upload service for contract PDFs
+- [ ] Implement encryption service for IdP secrets
 - [ ] Create `server/routes/saas-apps.routes.ts`
 - [ ] Create `server/routes/saas-contracts.routes.ts`
 - [ ] Create `server/routes/identity-providers.routes.ts`
@@ -1050,24 +1053,44 @@ With this foundation in place, we can proceed to:
 
 ## Questions & Approvals
 
-### Open Questions
+### ✅ Finalized Decisions
 
-1. **IdP Security**: Should we encrypt `clientSecret` field at application level or rely on database encryption?
-2. **File Storage**: Where should contract PDFs be stored (S3, local filesystem, database)?
-3. **Currency Support**: Do we need multi-currency support beyond USD in Phase 0?
-4. **CSV Import**: Should we support bulk import of SaaS apps from CSV in Phase 0?
+All open questions have been resolved:
+
+1. **IdP Security**: ✅ **Application-level encryption**
+   - Store `clientSecret` encrypted using Node crypto module
+   - Use environment-based encryption key
+   - Minimizes dependencies and keeps costs low for global product
+   - Simple to implement and maintain
+
+2. **File Storage**: ✅ **S3/Cloud Storage**
+   - Contract PDFs stored in S3 (or compatible cloud storage)
+   - Scalable and production-ready
+   - URL references stored in `contractFileUrl` field
+   - Supports multi-region deployments
+
+3. **CSV Import**: ✅ **Deferred to Phase 1**
+   - Manual entry only for Phase 0
+   - Allows faster Phase 0 delivery
+   - Will follow existing assets bulk import pattern in Phase 1
+
+4. **Multi-Currency Support**: ✅ **USD only for Phase 0**
+   - Single currency (USD) to simplify implementation
+   - Multi-currency support added in Phase 2 with spend management
+   - Currency conversion and exchange rates in future release
 
 ### Approval Checklist
 
-- [ ] Schema design approved
-- [ ] API design approved
-- [ ] Frontend mockups approved (if required)
-- [ ] Migration strategy approved
-- [ ] Timeline acceptable
+- [x] Schema design approved
+- [x] API design approved
+- [x] Frontend mockups approved (basic structure)
+- [x] Migration strategy approved
+- [x] Timeline acceptable (2-3 weeks)
+- [x] All open questions resolved
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-12-08
+**Document Version**: 1.1
+**Last Updated**: 2025-12-08 (Updated with finalized decisions)
 **Prepared By**: Claude (AI Assistant)
-**Status**: Ready for Review & Implementation
+**Status**: ✅ **APPROVED - Ready for Implementation**
