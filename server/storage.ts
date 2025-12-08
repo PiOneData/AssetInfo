@@ -362,6 +362,7 @@ export interface IStorage {
   revokeUserAppAccess(userId: string, appId: string, tenantId: string): Promise<void>;
   updateUserAppAccessType(userId: string, appId: string, tenantId: string, newAccessType: string): Promise<void>;
   getUsers(tenantId: string): Promise<User[]>;
+  getTenants(): Promise<Tenant[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2994,6 +2995,307 @@ export class DatabaseStorage implements IStorage {
     await db.update(policyTemplates)
       .set({ popularity: sql`${policyTemplates.popularity} + 1` })
       .where(eq(policyTemplates.id, id));
+  }
+
+  // ============================================
+  // Phase 5: Identity Governance & Access Reviews
+  // ============================================
+
+  // Access Review Campaigns (Phase 5)
+  async getAccessReviewCampaigns(tenantId: string, filters?: {status?: string}): Promise<AccessReviewCampaign[]> {
+    const conditions = [eq(accessReviewCampaigns.tenantId, tenantId)];
+
+    if (filters?.status) {
+      conditions.push(eq(accessReviewCampaigns.status, filters.status));
+    }
+
+    return db.select().from(accessReviewCampaigns)
+      .where(and(...conditions))
+      .orderBy(desc(accessReviewCampaigns.createdAt));
+  }
+
+  async getAccessReviewCampaign(id: string, tenantId: string): Promise<AccessReviewCampaign | undefined> {
+    const [campaign] = await db.select().from(accessReviewCampaigns)
+      .where(and(eq(accessReviewCampaigns.id, id), eq(accessReviewCampaigns.tenantId, tenantId)));
+    return campaign;
+  }
+
+  async createAccessReviewCampaign(campaign: InsertAccessReviewCampaign): Promise<AccessReviewCampaign> {
+    const [created] = await db.insert(accessReviewCampaigns).values(campaign).returning();
+    return created;
+  }
+
+  async updateAccessReviewCampaign(id: string, tenantId: string, updates: Partial<InsertAccessReviewCampaign>): Promise<AccessReviewCampaign | undefined> {
+    const [updated] = await db.update(accessReviewCampaigns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(accessReviewCampaigns.id, id), eq(accessReviewCampaigns.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteAccessReviewCampaign(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(accessReviewCampaigns)
+      .where(and(eq(accessReviewCampaigns.id, id), eq(accessReviewCampaigns.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Access Review Items (Phase 5)
+  async getAccessReviewItems(campaignId: string): Promise<AccessReviewItem[]> {
+    return db.select().from(accessReviewItems)
+      .where(eq(accessReviewItems.campaignId, campaignId))
+      .orderBy(desc(accessReviewItems.riskLevel), accessReviewItems.userName);
+  }
+
+  async getAccessReviewItem(id: string): Promise<AccessReviewItem | undefined> {
+    const [item] = await db.select().from(accessReviewItems)
+      .where(eq(accessReviewItems.id, id));
+    return item;
+  }
+
+  async getAccessReviewItemsPending(campaignId: string): Promise<AccessReviewItem[]> {
+    return db.select().from(accessReviewItems)
+      .where(and(
+        eq(accessReviewItems.campaignId, campaignId),
+        eq(accessReviewItems.decision, 'pending')
+      ))
+      .orderBy(desc(accessReviewItems.riskLevel), accessReviewItems.userName);
+  }
+
+  async createAccessReviewItem(item: InsertAccessReviewItem): Promise<AccessReviewItem> {
+    const [created] = await db.insert(accessReviewItems).values(item).returning();
+    return created;
+  }
+
+  async updateAccessReviewItem(id: string, updates: Partial<InsertAccessReviewItem>): Promise<AccessReviewItem | undefined> {
+    const [updated] = await db.update(accessReviewItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(accessReviewItems.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Access Review Decisions (Phase 5)
+  async getAccessReviewDecisions(campaignId: string): Promise<AccessReviewDecision[]> {
+    return db.select().from(accessReviewDecisions)
+      .where(eq(accessReviewDecisions.campaignId, campaignId))
+      .orderBy(desc(accessReviewDecisions.createdAt));
+  }
+
+  async createAccessReviewDecision(decision: InsertAccessReviewDecision): Promise<AccessReviewDecision> {
+    const [created] = await db.insert(accessReviewDecisions).values(decision).returning();
+    return created;
+  }
+
+  // Role Templates (Phase 5)
+  async getRoleTemplates(tenantId: string, filters?: {department?: string}): Promise<RoleTemplate[]> {
+    const conditions = [eq(roleTemplates.tenantId, tenantId)];
+
+    if (filters?.department) {
+      conditions.push(eq(roleTemplates.department, filters.department));
+    }
+
+    return db.select().from(roleTemplates)
+      .where(and(...conditions))
+      .orderBy(roleTemplates.name);
+  }
+
+  async getRoleTemplate(id: string, tenantId: string): Promise<RoleTemplate | undefined> {
+    const [template] = await db.select().from(roleTemplates)
+      .where(and(eq(roleTemplates.id, id), eq(roleTemplates.tenantId, tenantId)));
+    return template;
+  }
+
+  async createRoleTemplate(template: InsertRoleTemplate): Promise<RoleTemplate> {
+    const [created] = await db.insert(roleTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateRoleTemplate(id: string, tenantId: string, updates: Partial<InsertRoleTemplate>): Promise<RoleTemplate | undefined> {
+    const [updated] = await db.update(roleTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(roleTemplates.id, id), eq(roleTemplates.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteRoleTemplate(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(roleTemplates)
+      .where(and(eq(roleTemplates.id, id), eq(roleTemplates.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // User Role Assignments (Phase 5)
+  async getUserRoleAssignments(tenantId: string, filters?: {userId?: string; isActive?: boolean}): Promise<UserRoleAssignment[]> {
+    const conditions = [eq(userRoleAssignments.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(userRoleAssignments.userId, filters.userId));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(userRoleAssignments.isActive, filters.isActive));
+    }
+
+    return db.select().from(userRoleAssignments)
+      .where(and(...conditions))
+      .orderBy(desc(userRoleAssignments.createdAt));
+  }
+
+  async getUserRoleAssignment(id: string, tenantId: string): Promise<UserRoleAssignment | undefined> {
+    const [assignment] = await db.select().from(userRoleAssignments)
+      .where(and(eq(userRoleAssignments.id, id), eq(userRoleAssignments.tenantId, tenantId)));
+    return assignment;
+  }
+
+  async createUserRoleAssignment(assignment: InsertUserRoleAssignment): Promise<UserRoleAssignment> {
+    const [created] = await db.insert(userRoleAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async updateUserRoleAssignment(id: string, tenantId: string, updates: Partial<InsertUserRoleAssignment>): Promise<UserRoleAssignment | undefined> {
+    const [updated] = await db.update(userRoleAssignments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(userRoleAssignments.id, id), eq(userRoleAssignments.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Privilege Drift Alerts (Phase 5)
+  async getPrivilegeDriftAlerts(tenantId: string, filters?: {status?: string; riskLevel?: string}): Promise<PrivilegeDriftAlert[]> {
+    const conditions = [eq(privilegeDriftAlerts.tenantId, tenantId)];
+
+    if (filters?.status) {
+      conditions.push(eq(privilegeDriftAlerts.status, filters.status));
+    }
+    if (filters?.riskLevel) {
+      conditions.push(eq(privilegeDriftAlerts.riskLevel, filters.riskLevel));
+    }
+
+    return db.select().from(privilegeDriftAlerts)
+      .where(and(...conditions))
+      .orderBy(desc(privilegeDriftAlerts.riskScore), desc(privilegeDriftAlerts.detectedAt));
+  }
+
+  async getPrivilegeDriftAlert(id: string, tenantId: string): Promise<PrivilegeDriftAlert | undefined> {
+    const [alert] = await db.select().from(privilegeDriftAlerts)
+      .where(and(eq(privilegeDriftAlerts.id, id), eq(privilegeDriftAlerts.tenantId, tenantId)));
+    return alert;
+  }
+
+  async createPrivilegeDriftAlert(alert: InsertPrivilegeDriftAlert): Promise<PrivilegeDriftAlert> {
+    const [created] = await db.insert(privilegeDriftAlerts).values(alert).returning();
+    return created;
+  }
+
+  async updatePrivilegeDriftAlert(id: string, tenantId: string, updates: Partial<InsertPrivilegeDriftAlert>): Promise<PrivilegeDriftAlert | undefined> {
+    const [updated] = await db.update(privilegeDriftAlerts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(privilegeDriftAlerts.id, id), eq(privilegeDriftAlerts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Overprivileged Accounts (Phase 5)
+  async getOverprivilegedAccounts(tenantId: string, filters?: {status?: string; riskLevel?: string}): Promise<OverprivilegedAccount[]> {
+    const conditions = [eq(overprivilegedAccounts.tenantId, tenantId)];
+
+    if (filters?.status) {
+      conditions.push(eq(overprivilegedAccounts.status, filters.status));
+    }
+    if (filters?.riskLevel) {
+      conditions.push(eq(overprivilegedAccounts.riskLevel, filters.riskLevel));
+    }
+
+    return db.select().from(overprivilegedAccounts)
+      .where(and(...conditions))
+      .orderBy(desc(overprivilegedAccounts.riskScore), desc(overprivilegedAccounts.detectedAt));
+  }
+
+  async getOverprivilegedAccount(id: string, tenantId: string): Promise<OverprivilegedAccount | undefined> {
+    const [account] = await db.select().from(overprivilegedAccounts)
+      .where(and(eq(overprivilegedAccounts.id, id), eq(overprivilegedAccounts.tenantId, tenantId)));
+    return account;
+  }
+
+  async createOverprivilegedAccount(account: InsertOverprivilegedAccount): Promise<OverprivilegedAccount> {
+    const [created] = await db.insert(overprivilegedAccounts).values(account).returning();
+    return created;
+  }
+
+  async updateOverprivilegedAccount(id: string, tenantId: string, updates: Partial<InsertOverprivilegedAccount>): Promise<OverprivilegedAccount | undefined> {
+    const [updated] = await db.update(overprivilegedAccounts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(overprivilegedAccounts.id, id), eq(overprivilegedAccounts.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Helper methods for Phase 5
+  async getAllUserAppAccess(tenantId: string): Promise<any[]> {
+    // Get all user-app access for the tenant
+    const userAccess = await db.select({
+      userId: userAppAccess.userId,
+      userName: users.name,
+      userEmail: users.email,
+      userDepartment: users.department,
+      userManager: users.manager,
+      appId: userAppAccess.appId,
+      appName: saasApps.name,
+      appCategory: saasApps.category,
+      accessType: userAppAccess.accessType,
+      grantedDate: userAppAccess.grantedAt,
+      lastAccessDate: userAppAccess.lastAccessDate,
+      businessJustification: userAppAccess.businessJustification,
+    })
+    .from(userAppAccess)
+    .leftJoin(users, eq(userAppAccess.userId, users.id))
+    .leftJoin(saasApps, and(
+      eq(userAppAccess.appId, saasApps.id),
+      eq(saasApps.tenantId, tenantId)
+    ))
+    .where(and(
+      eq(userAppAccess.tenantId, tenantId),
+      eq(userAppAccess.status, 'active')
+    ))
+    .orderBy(users.name, saasApps.name);
+
+    return userAccess;
+  }
+
+  async revokeUserAppAccess(userId: string, appId: string, tenantId: string): Promise<void> {
+    await db.update(userAppAccess)
+      .set({
+        status: 'revoked',
+        revokedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(userAppAccess.userId, userId),
+        eq(userAppAccess.appId, appId),
+        eq(userAppAccess.tenantId, tenantId)
+      ));
+  }
+
+  async updateUserAppAccessType(userId: string, appId: string, tenantId: string, newAccessType: string): Promise<void> {
+    await db.update(userAppAccess)
+      .set({
+        accessType: newAccessType,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(userAppAccess.userId, userId),
+        eq(userAppAccess.appId, appId),
+        eq(userAppAccess.tenantId, tenantId)
+      ));
+  }
+
+  async getUsers(tenantId: string): Promise<User[]> {
+    return db.select().from(users)
+      .where(eq(users.tenantId, tenantId))
+      .orderBy(users.name);
+  }
+
+  async getTenants(): Promise<Tenant[]> {
+    return db.select().from(tenants).orderBy(tenants.name);
   }
 }
 

@@ -60,6 +60,12 @@ export class PolicyEngine {
     this.eventSystem.on('user.offboarded', (data) => this.handleEvent('user_offboarded', data));
     this.eventSystem.on('contract.renewal_approaching', (data) => this.handleEvent('renewal_approaching', data));
     this.eventSystem.on('budget.exceeded', (data) => this.handleEvent('budget_exceeded', data));
+
+    // Phase 5: Identity Governance & Access Reviews
+    this.eventSystem.on('privilege_drift.detected', (data) => this.handleEvent('privilege_drift_detected', data));
+    this.eventSystem.on('overprivileged_account.detected', (data) => this.handleEvent('overprivileged_detected', data));
+    this.eventSystem.on('access_review.completed', (data) => this.handleEvent('access_review_completed', data));
+    this.eventSystem.on('access_review.overdue', (data) => this.handleEvent('access_review_overdue', data));
   }
 
   /**

@@ -36,6 +36,8 @@ import spendRoutes from "./spend.routes";
 import offboardingRoutes from "./offboarding.routes";
 // Phase 4: Policy Automation Engine
 import policyRoutes from "./policy.routes";
+// Phase 5: Identity Governance & Access Reviews
+import accessReviewsRoutes from "./access-reviews.routes";
 // All routes have been migrated from routes.legacy.ts
 
 /**
@@ -90,7 +92,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 
   // ========================================
-  // SAAS GOVERNANCE ROUTES (Phase 0-4)
+  // SAAS GOVERNANCE ROUTES (Phase 0-5)
   // ========================================
   app.use("/api/saas-apps", saasAppsRoutes);           // 8 routes - SaaS app management
   app.use("/api/saas-contracts", saasContractsRoutes); // 7 routes - Contract management
@@ -100,6 +102,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/spend", spendRoutes);                  // 7 routes - Spend management (Phase 2)
   app.use("/api/offboarding", offboardingRoutes);      // 12 routes - Offboarding automation (Phase 3)
   app.use("/api/policies", policyRoutes);              // 13 routes - Policy automation engine (Phase 4)
+  app.use("/api/access-reviews", accessReviewsRoutes); // 22 routes - Identity governance (Phase 5)
 
   // SPECIAL ROUTES (Non-API)
   app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
