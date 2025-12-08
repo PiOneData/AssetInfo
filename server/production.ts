@@ -2,7 +2,7 @@ import "dotenv/config";
 import path from "node:path";
 import { startOpenAuditScheduler } from "./services/openauditScheduler";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerAllRoutes } from "./routes";
 import { log } from "./vite";
 import { seedDatabase } from "./storage";
 
@@ -70,7 +70,7 @@ app.use((req, res, next) => {
     console.warn("Error details:", error instanceof Error ? error.message : String(error));
   }
 
-  const server = await registerRoutes(app);
+  const server = await registerAllRoutes(app);
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

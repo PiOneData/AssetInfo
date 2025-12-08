@@ -5700,7 +5700,7 @@ const allowedRecommendationTypes = new Map<string, string>([
         skipped: skipped.length,
         createdUsers: createdUsers,
         createErrors,
-        skipped
+        skippedUsers: skipped
       });
 
     } catch (error) {

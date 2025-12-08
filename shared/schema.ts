@@ -873,6 +873,68 @@ export const createEnrollmentTokenSchema = z.object({
   expiresAt: z.coerce.date().optional(),
 });
 
+// ============================================
+// Network Monitoring Tables
+// ============================================
+
+// Network Monitor Agents - manages WiFi monitoring agents
+export const networkMonitorAgents = pgTable("network_monitor_agents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: text("agent_id").notNull().unique(),
+  tenantId: varchar("tenant_id").notNull(),
+  apiKey: text("api_key").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  location: text("location"),
+  isActive: boolean("is_active").default(true),
+  lastHeartbeat: timestamp("last_heartbeat"),
+  version: text("version"),
+  capabilities: jsonb("capabilities"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// WiFi Presence - tracks devices detected by WiFi monitoring
+export const wifiPresence = pgTable("wifi_presence", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  tenantId: varchar("tenant_id").notNull(),
+  macAddress: text("mac_address").notNull(),
+  ipAddress: text("ip_address"),
+  hostname: text("hostname"),
+  manufacturer: text("manufacturer"),
+  assetId: varchar("asset_id"), // Link to assets table
+  assetName: text("asset_name"),
+  isAuthorized: boolean("is_authorized").default(false),
+  firstSeen: timestamp("first_seen").defaultNow(),
+  lastSeen: timestamp("last_seen").defaultNow(),
+  isActive: boolean("is_active").default(true),
+  connectionDuration: integer("connection_duration").default(0), // in seconds
+  deviceType: text("device_type"), // phone, laptop, tablet, etc
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Unknown Device Alerts - alerts for unrecognized devices
+export const unknownDeviceAlerts = pgTable("unknown_device_alerts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  tenantId: varchar("tenant_id").notNull(),
+  macAddress: text("mac_address").notNull(),
+  ipAddress: text("ip_address"),
+  hostname: text("hostname"),
+  manufacturer: text("manufacturer"),
+  deviceType: text("device_type"),
+  detectedAt: timestamp("detected_at").defaultNow(),
+  isResolved: boolean("is_resolved").default(false),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by"),
+  resolution: text("resolution"),
+  severity: text("severity").default("medium"), // low, medium, high
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Types
 export type DiscoveryJob = typeof discoveryJobs.$inferSelect;
 export type InsertDiscoveryJob = z.infer<typeof insertDiscoveryJobSchema>;
