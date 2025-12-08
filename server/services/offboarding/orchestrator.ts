@@ -16,6 +16,7 @@ import { OAuthRevocationService } from './oauth-revocation';
 import { OwnershipTransferService } from './ownership-transfer';
 import { PlaybookEngine } from './playbook-engine';
 import { AuditReportGenerator } from './audit-report';
+import { policyEngine } from '../policy/engine';
 
 export interface OffboardingPreview {
   userId: string;
@@ -204,10 +205,24 @@ export class OffboardingOrchestrator {
       const finalRequest = await storage.getOffboardingRequest(requestId, this.tenantId);
       const hasFailures = (finalRequest?.failedTasks || 0) > 0;
 
+      const finalStatus = hasFailures ? 'partial' : 'completed';
+
       await storage.updateOffboardingRequest(requestId, this.tenantId, {
-        status: hasFailures ? 'partial' : 'completed',
+        status: finalStatus,
         completedAt: new Date(),
         auditReportUrl
+      });
+
+      // Emit policy event for completed offboarding
+      const eventSystem = policyEngine.getEventSystem();
+      eventSystem.emit('user.offboarded', {
+        tenantId: this.tenantId,
+        userId: request.userId,
+        offboardingStatus: finalStatus,
+        offboardingRequestId: requestId,
+        totalTasks: finalRequest?.totalTasks || 0,
+        completedTasks: finalRequest?.completedTasks || 0,
+        failedTasks: finalRequest?.failedTasks || 0
       });
 
       console.log(`[Offboarding] Completed request ${requestId}`);

@@ -11,6 +11,7 @@
  */
 
 import { storage } from '../storage';
+import { policyEngine } from './policy/engine';
 
 export interface LicenseOptimizationResult {
   appId: string;
@@ -147,6 +148,19 @@ export class LicenseOptimizer {
       costPerLicense,
       wastedCost
     });
+
+    // Emit policy events for unused licenses (inactive users)
+    const eventSystem = policyEngine.getEventSystem();
+    for (const inactiveUser of inactiveUsers) {
+      eventSystem.emit('license.unused', {
+        tenantId: this.tenantId,
+        userId: inactiveUser.userId,
+        appId: app.id,
+        appName: app.name,
+        unusedDays: inactiveUser.daysSinceLastActive || 0,
+        cost: costPerLicense
+      });
+    }
 
     return {
       appId: app.id,

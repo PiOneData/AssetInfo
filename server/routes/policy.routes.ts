@@ -14,6 +14,7 @@
 import { Router, Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.middleware";
 import { policyEngine } from "../services/policy/engine";
+import { storage } from "../storage";
 
 const router = Router();
 
@@ -31,8 +32,8 @@ const router = Router();
  */
 router.get("/", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: const policies = await storage.getAutomatedPolicies(req.user!.tenantId);
-    res.json([]);
+    const policies = await storage.getAutomatedPolicies(req.user!.tenantId);
+    res.json(policies);
   } catch (error) {
     console.error('Failed to fetch policies:', error);
     res.status(500).json({ message: "Failed to fetch policies" });
@@ -99,25 +100,21 @@ router.post("/", authenticateToken, requireRole("it-manager"), async (req: Reque
       }
     }
 
-    // In real implementation:
-    // const policy = await storage.createAutomatedPolicy({
-    //   tenantId: req.user!.tenantId,
-    //   name,
-    //   description,
-    //   triggerType,
-    //   triggerConfig,
-    //   conditions,
-    //   actions,
-    //   cooldownMinutes,
-    //   maxExecutionsPerDay,
-    //   requireApproval,
-    //   createdBy: req.user!.id
-    // });
-
-    res.status(201).json({
-      id: 'policy-' + Date.now(),
-      message: "Policy created successfully"
+    const policy = await storage.createAutomatedPolicy({
+      tenantId: req.user!.tenantId,
+      name,
+      description,
+      triggerType,
+      triggerConfig,
+      conditions,
+      actions,
+      cooldownMinutes,
+      maxExecutionsPerDay,
+      requireApproval,
+      createdBy: req.user!.id
     });
+
+    res.status(201).json(policy);
   } catch (error) {
     console.error('Failed to create policy:', error);
     res.status(500).json({ message: "Failed to create policy" });
@@ -138,8 +135,13 @@ router.post("/", authenticateToken, requireRole("it-manager"), async (req: Reque
  */
 router.get("/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: const policy = await storage.getAutomatedPolicy(req.params.id, req.user!.tenantId);
-    res.status(404).json({ message: "Policy not found" });
+    const policy = await storage.getAutomatedPolicy(req.params.id, req.user!.tenantId);
+
+    if (!policy) {
+      return res.status(404).json({ message: "Policy not found" });
+    }
+
+    res.json(policy);
   } catch (error) {
     console.error('Failed to fetch policy:', error);
     res.status(500).json({ message: "Failed to fetch policy" });
@@ -160,8 +162,13 @@ router.get("/:id", authenticateToken, requireRole("it-manager"), async (req: Req
  */
 router.put("/:id", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: const updated = await storage.updateAutomatedPolicy(req.params.id, req.user!.tenantId, req.body);
-    res.json({ message: "Policy updated successfully" });
+    const updated = await storage.updateAutomatedPolicy(req.params.id, req.user!.tenantId, req.body);
+
+    if (!updated) {
+      return res.status(404).json({ message: "Policy not found" });
+    }
+
+    res.json(updated);
   } catch (error) {
     console.error('Failed to update policy:', error);
     res.status(500).json({ message: "Failed to update policy" });
@@ -182,7 +189,12 @@ router.put("/:id", authenticateToken, requireRole("it-manager"), async (req: Req
  */
 router.delete("/:id", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: await storage.deleteAutomatedPolicy(req.params.id, req.user!.tenantId);
+    const deleted = await storage.deleteAutomatedPolicy(req.params.id, req.user!.tenantId);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Policy not found" });
+    }
+
     res.json({ message: "Policy deleted successfully" });
   } catch (error) {
     console.error('Failed to delete policy:', error);
@@ -204,8 +216,13 @@ router.delete("/:id", authenticateToken, requireRole("admin"), async (req: Reque
  */
 router.post("/:id/enable", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: await storage.updateAutomatedPolicy(req.params.id, req.user!.tenantId, { enabled: true });
-    res.json({ message: "Policy enabled successfully" });
+    const updated = await storage.updateAutomatedPolicy(req.params.id, req.user!.tenantId, { enabled: true });
+
+    if (!updated) {
+      return res.status(404).json({ message: "Policy not found" });
+    }
+
+    res.json({ message: "Policy enabled successfully", policy: updated });
   } catch (error) {
     console.error('Failed to enable policy:', error);
     res.status(500).json({ message: "Failed to enable policy" });
@@ -226,8 +243,13 @@ router.post("/:id/enable", authenticateToken, requireRole("it-manager"), async (
  */
 router.post("/:id/disable", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: await storage.updateAutomatedPolicy(req.params.id, req.user!.tenantId, { enabled: false });
-    res.json({ message: "Policy disabled successfully" });
+    const updated = await storage.updateAutomatedPolicy(req.params.id, req.user!.tenantId, { enabled: false });
+
+    if (!updated) {
+      return res.status(404).json({ message: "Policy not found" });
+    }
+
+    res.json({ message: "Policy disabled successfully", policy: updated });
   } catch (error) {
     console.error('Failed to disable policy:', error);
     res.status(500).json({ message: "Failed to disable policy" });
@@ -273,8 +295,8 @@ router.post("/:id/test", authenticateToken, requireRole("it-manager"), async (re
  */
 router.get("/:id/executions", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: const executions = await storage.getPolicyExecutions(req.params.id);
-    res.json([]);
+    const executions = await storage.getPolicyExecutions(req.user!.tenantId, { policyId: req.params.id });
+    res.json(executions);
   } catch (error) {
     console.error('Failed to fetch executions:', error);
     res.status(500).json({ message: "Failed to fetch executions" });
@@ -295,12 +317,22 @@ router.get("/:id/executions", authenticateToken, requireRole("it-manager"), asyn
  */
 router.get("/:id/stats", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: const stats = await storage.getPolicyStats(req.params.id);
+    const policy = await storage.getAutomatedPolicy(req.params.id, req.user!.tenantId);
+
+    if (!policy) {
+      return res.status(404).json({ message: "Policy not found" });
+    }
+
+    const successRate = policy.executionCount && policy.executionCount > 0
+      ? Math.round((policy.successCount || 0) / policy.executionCount * 100)
+      : 0;
+
     res.json({
-      executionCount: 0,
-      successCount: 0,
-      failureCount: 0,
-      successRate: 0
+      executionCount: policy.executionCount || 0,
+      successCount: policy.successCount || 0,
+      failureCount: policy.failureCount || 0,
+      successRate,
+      lastExecutedAt: policy.lastExecutedAt
     });
   } catch (error) {
     console.error('Failed to fetch stats:', error);
@@ -322,8 +354,9 @@ router.get("/:id/stats", authenticateToken, requireRole("it-manager"), async (re
  */
 router.get("/templates", authenticateToken, requireRole("it-manager"), async (req: Request, res: Response) => {
   try {
-    // In real implementation: const templates = await storage.getPolicyTemplates();
-    res.json([]);
+    const category = req.query.category as string | undefined;
+    const templates = await storage.getPolicyTemplates(category ? { category } : undefined);
+    res.json(templates);
   } catch (error) {
     console.error('Failed to fetch templates:', error);
     res.status(500).json({ message: "Failed to fetch templates" });
@@ -346,20 +379,28 @@ router.post("/templates/:id/use", authenticateToken, requireRole("it-manager"), 
   try {
     const { name, ...overrides } = req.body;
 
-    // In real implementation:
-    // const template = await storage.getPolicyTemplate(req.params.id);
-    // const policy = await storage.createAutomatedPolicy({
-    //   ...template,
-    //   name: name || template.name,
-    //   ...overrides,
-    //   tenantId: req.user!.tenantId,
-    //   createdBy: req.user!.id
-    // });
+    const template = await storage.getPolicyTemplate(req.params.id);
 
-    res.status(201).json({
-      id: 'policy-' + Date.now(),
-      message: "Policy created from template"
+    if (!template) {
+      return res.status(404).json({ message: "Template not found" });
+    }
+
+    const policy = await storage.createAutomatedPolicy({
+      tenantId: req.user!.tenantId,
+      name: name || template.name,
+      description: template.description,
+      triggerType: template.triggerType,
+      triggerConfig: template.triggerConfig,
+      conditions: template.conditions,
+      actions: template.actions,
+      ...overrides,
+      createdBy: req.user!.id
     });
+
+    // Increment template popularity
+    await storage.incrementTemplatePopularity(req.params.id);
+
+    res.status(201).json(policy);
   } catch (error) {
     console.error('Failed to create policy from template:', error);
     res.status(500).json({ message: "Failed to create policy from template" });

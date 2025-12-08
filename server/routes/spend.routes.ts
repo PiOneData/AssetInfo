@@ -9,6 +9,7 @@ import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { authenticateToken, requireRole } from "../middleware/auth.middleware";
 import { LicenseOptimizer } from "../services/license-optimizer";
+import { policyEngine } from "../services/policy/engine";
 
 const router = Router();
 
@@ -228,6 +229,30 @@ router.get("/by-department", authenticateToken, requireRole("it-manager"), async
 
     // Sort by annual spend descending
     spendByDepartment.sort((a, b) => b.annualSpend - a.annualSpend);
+
+    // Emit budget.exceeded events for departments with high spending
+    // Note: This uses a simple heuristic. In production, integrate with actual budget system.
+    const eventSystem = policyEngine.getEventSystem();
+    const avgSpend = spendByDepartment.reduce((sum, d) => sum + d.annualSpend, 0) / Math.max(spendByDepartment.length, 1);
+    const threshold = 80; // 80% threshold
+
+    for (const dept of spendByDepartment) {
+      // Assume budget is 120% of average spend (simple heuristic)
+      const estimatedBudget = avgSpend * 1.2;
+      const percentageUsed = (dept.annualSpend / estimatedBudget) * 100;
+
+      // Emit event if department spending exceeds threshold
+      if (percentageUsed >= threshold) {
+        eventSystem.emit('budget.exceeded', {
+          tenantId,
+          department: dept.department,
+          threshold,
+          currentSpend: dept.annualSpend,
+          budgetAmount: estimatedBudget,
+          percentageUsed
+        });
+      }
+    }
 
     res.json(spendByDepartment);
   } catch (error) {

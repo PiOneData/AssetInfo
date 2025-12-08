@@ -101,10 +101,7 @@ export class PolicyEngine {
    * Find policies matching the trigger type
    */
   private async findMatchingPolicies(triggerType: string, tenantId: string): Promise<any[]> {
-    // In a real implementation, this would query the database
-    // For now, return empty array
-    // return await storage.getAutomatedPolicies(tenantId, { triggerType, enabled: true });
-    return [];
+    return await storage.getAutomatedPolicies(tenantId, { triggerType, enabled: true });
   }
 
   /**
@@ -127,8 +124,14 @@ export class PolicyEngine {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Would query: const executionsToday = await storage.getPolicyExecutionsSince(policy.id, today);
-      // if (executionsToday.length >= policy.maxExecutionsPerDay) return false;
+      const executions = await storage.getPolicyExecutions(policy.tenantId, { policyId: policy.id });
+      const executionsToday = executions.filter(e =>
+        e.createdAt && new Date(e.createdAt) >= today
+      );
+
+      if (executionsToday.length >= policy.maxExecutionsPerDay) {
+        return false;
+      }
     }
 
     return true;
@@ -199,19 +202,18 @@ export class PolicyEngine {
     console.log(`[Policy Engine] Executing policy: ${policy.name}`);
 
     // Create execution record
-    const execution = {
+    const executionRecord = await storage.createPolicyExecution({
       tenantId: context.tenantId,
       policyId: policy.id,
       triggerEvent: context.triggerEvent,
       triggerData: context.triggerData,
-      status: 'running',
-      actionsExecuted: 0,
-      actionsSucceeded: 0,
-      actionsFailed: 0
-    };
+      status: 'running'
+    });
 
-    // Would create: const executionRecord = await storage.createPolicyExecution(execution);
-    const executionId = 'exec-' + Date.now();
+    const executionId = executionRecord.id;
+    let actionsExecuted = 0;
+    let actionsSucceeded = 0;
+    let actionsFailed = 0;
 
     const results: PolicyExecutionResult['results'] = [];
 
@@ -228,7 +230,7 @@ export class PolicyEngine {
             success: false,
             error: 'No handler found'
           });
-          execution.actionsFailed++;
+          actionsFailed++;
           continue;
         }
 
@@ -242,12 +244,12 @@ export class PolicyEngine {
         });
 
         if (result.success) {
-          execution.actionsSucceeded++;
+          actionsSucceeded++;
         } else {
-          execution.actionsFailed++;
+          actionsFailed++;
         }
 
-        execution.actionsExecuted++;
+        actionsExecuted++;
       } catch (error: any) {
         console.error(`[Policy Engine] Error executing action ${action.type}:`, error);
         results.push({
@@ -255,29 +257,37 @@ export class PolicyEngine {
           success: false,
           error: error.message
         });
-        execution.actionsFailed++;
-        execution.actionsExecuted++;
+        actionsFailed++;
+        actionsExecuted++;
       }
     }
 
     // Update execution status
-    const finalStatus = execution.actionsFailed > 0
-      ? (execution.actionsSucceeded > 0 ? 'partial' : 'failed')
+    const finalStatus = actionsFailed > 0
+      ? (actionsSucceeded > 0 ? 'partial' : 'failed')
       : 'success';
 
-    // Would update: await storage.updatePolicyExecution(executionId, { status: finalStatus, completedAt: new Date(), result: results });
+    // Update execution record
+    await storage.updatePolicyExecution(executionId, context.tenantId, {
+      status: finalStatus,
+      completedAt: new Date(),
+      actionsExecuted,
+      actionsSucceeded,
+      actionsFailed,
+      result: { actions: results }
+    });
 
     // Update policy statistics
-    // await storage.updatePolicyStats(policy.id, finalStatus);
+    await storage.updatePolicyStats(policy.id, context.tenantId, finalStatus);
 
     console.log(`[Policy Engine] Policy execution completed: ${finalStatus}`);
 
     return {
       success: finalStatus === 'success',
       executionId,
-      actionsExecuted: execution.actionsExecuted,
-      actionsSucceeded: execution.actionsSucceeded,
-      actionsFailed: execution.actionsFailed,
+      actionsExecuted,
+      actionsSucceeded,
+      actionsFailed,
       results
     };
   }
@@ -286,18 +296,20 @@ export class PolicyEngine {
    * Manually trigger a policy (for testing)
    */
   async triggerPolicy(policyId: string, tenantId: string, testData?: Record<string, any>): Promise<PolicyExecutionResult> {
-    // const policy = await storage.getAutomatedPolicy(policyId, tenantId);
-    // if (!policy) throw new Error('Policy not found');
+    const policy = await storage.getAutomatedPolicy(policyId, tenantId);
+    if (!policy) {
+      throw new Error('Policy not found');
+    }
 
-    // Return mock result for now
-    return {
-      success: true,
-      executionId: 'test-' + Date.now(),
-      actionsExecuted: 0,
-      actionsSucceeded: 0,
-      actionsFailed: 0,
-      results: []
+    // Create test context
+    const context: PolicyContext = {
+      tenantId,
+      triggerEvent: policy.triggerType,
+      triggerData: testData || {}
     };
+
+    // Execute the policy
+    return await this.executePolicy(policy, context);
   }
 
   /**

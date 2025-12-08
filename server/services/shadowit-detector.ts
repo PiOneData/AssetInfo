@@ -11,6 +11,7 @@ import { storage } from '../storage';
 import { DiscoveredApp, DiscoveredUserAccess, DiscoveredOAuthToken } from './idp/connector.interface';
 import { OAuthRiskAnalyzer } from './oauth-risk-analyzer';
 import type { InsertSaasApp } from '@shared/schema';
+import { policyEngine } from './policy/engine';
 
 export interface ShadowITAnalysisResult {
   isUnapproved: boolean;
@@ -245,6 +246,35 @@ export class ShadowITDetector {
       const created = await storage.createSaasApp(newApp);
 
       console.log(`[ShadowIT] Created new app: ${discoveredApp.name} (ID: ${created.id})`);
+
+      // Emit policy event for new app discovery
+      if (analysis.isUnapproved) {
+        const eventSystem = policyEngine.getEventSystem();
+        const riskLevel = analysis.riskScore >= 75 ? 'critical' :
+                         analysis.riskScore >= 50 ? 'high' :
+                         analysis.riskScore >= 25 ? 'medium' : 'low';
+
+        eventSystem.emit('app.discovered', {
+          tenantId: this.tenantId,
+          appId: created.id,
+          appName: created.name,
+          approvalStatus: created.approvalStatus,
+          riskLevel,
+          riskScore: analysis.riskScore
+        });
+
+        // Also emit OAuth risky permission event if permissions are high-risk
+        if (discoveredApp.permissions && discoveredApp.permissions.length > 0 && analysis.riskScore >= 50) {
+          eventSystem.emit('oauth.risky_permission', {
+            tenantId: this.tenantId,
+            appId: created.id,
+            appName: created.name,
+            riskLevel,
+            riskScore: analysis.riskScore,
+            scopes: discoveredApp.permissions
+          });
+        }
+      }
 
       return { created: true, appId: created.id };
     }
