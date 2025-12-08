@@ -4,6 +4,9 @@ import { authenticateToken, requireRole } from "../middleware/auth.middleware";
 import { auditLogger, AuditActions, ResourceTypes } from "../audit-logger";
 import { insertIdentityProviderSchema } from "@shared/schema";
 import { encrypt, decrypt } from "../services/encryption";
+import { idpSyncScheduler } from "../services/idp/sync-scheduler";
+import { AzureADConnector } from "../services/idp/azuread-connector";
+import { GoogleWorkspaceConnector } from "../services/idp/google-connector";
 import { z } from "zod";
 
 const router = Router();
@@ -245,17 +248,35 @@ router.post("/:id/test", authenticateToken, requireRole("admin"), async (req: Re
       return res.status(404).json({ message: "Identity provider not found" });
     }
 
-    // TODO: Implement actual connection test based on provider type
-    // For now, return a placeholder response
+    // Create connector and test connection
+    const decryptedSecret = decrypt(provider.clientSecret);
+    const config = {
+      clientId: provider.clientId,
+      clientSecret: decryptedSecret,
+      tenantDomain: provider.tenantDomain || undefined,
+      scopes: provider.scopes || [],
+      customConfig: provider.config || {}
+    };
+
+    let connector;
+    if (provider.type === 'azuread') {
+      connector = new AzureADConnector(config, req.user!.tenantId, provider.id);
+    } else if (provider.type === 'google') {
+      connector = new GoogleWorkspaceConnector(config, req.user!.tenantId, provider.id);
+    } else {
+      return res.status(400).json({ message: `Unsupported provider type: ${provider.type}` });
+    }
+
+    const testResult = await connector.testConnection();
 
     res.json({
-      success: true,
-      message: "Connection test placeholder - implement in Phase 1",
+      success: testResult.success,
+      message: testResult.success ? 'Connection successful' : testResult.error,
       provider: provider.type
     });
   } catch (error) {
     console.error('Failed to test identity provider:', error);
-    res.status(500).json({ message: "Failed to test connection" });
+    res.status(500).json({ message: "Failed to test connection", error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -285,14 +306,6 @@ router.post("/:id/sync", authenticateToken, requireRole("admin"), async (req: Re
       return res.status(404).json({ message: "Identity provider not found" });
     }
 
-    // Update sync status to "syncing"
-    await storage.updateIdpSyncStatus(req.params.id, req.user!.tenantId, 'syncing');
-
-    // TODO: Implement actual sync logic in Phase 1
-    // For now, immediately mark as idle
-
-    await storage.updateIdpSyncStatus(req.params.id, req.user!.tenantId, 'idle');
-
     // Audit log
     await auditLogger.logActivity(
       auditLogger.createUserContext(req),
@@ -305,26 +318,18 @@ router.post("/:id/sync", authenticateToken, requireRole("admin"), async (req: Re
       req
     );
 
+    // Trigger sync asynchronously (don't wait for completion)
+    idpSyncScheduler.triggerImmediateSync(req.user!.tenantId, provider.id).catch(error => {
+      console.error('Sync error:', error);
+    });
+
     res.json({
       success: true,
-      message: "Sync placeholder - implement in Phase 1",
+      message: "Sync triggered successfully",
       provider: provider.name
     });
   } catch (error) {
-    console.error('Failed to sync identity provider:', error);
-
-    // Update sync status to error
-    try {
-      await storage.updateIdpSyncStatus(
-        req.params.id,
-        req.user!.tenantId,
-        'error',
-        error instanceof Error ? error.message : 'Unknown error'
-      );
-    } catch (updateError) {
-      console.error('Failed to update sync status:', updateError);
-    }
-
+    console.error('Failed to trigger sync:', error);
     res.status(500).json({ message: "Failed to trigger sync" });
   }
 });

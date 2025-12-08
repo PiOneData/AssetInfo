@@ -56,6 +56,7 @@ const navigation = [
     icon: Cloud,
     requiredRole: "it-manager",
     subItems: [
+      { name: "Discovery", href: "/discovery", icon: Scan },
       { name: "Applications", href: "/saas-apps", icon: Cloud },
       { name: "Contracts", href: "/saas-contracts", icon: FileText },
       { name: "Identity Providers", href: "/identity-providers", icon: Shield, requiredRole: "admin" },
