@@ -1763,3 +1763,400 @@ export type PolicyTemplate = typeof policyTemplates.$inferSelect;
 export type InsertPolicyTemplate = z.infer<typeof insertPolicyTemplateSchema>;
 export type PolicyApproval = typeof policyApprovals.$inferSelect;
 export type InsertPolicyApproval = z.infer<typeof insertPolicyApprovalSchema>;
+
+// ========================================
+// Phase 5: Identity Governance & Access Reviews
+// ========================================
+
+// Access Review Campaigns
+export const accessReviewCampaigns = pgTable(
+  "access_review_campaigns",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // Campaign details
+    name: text("name").notNull(),
+    description: text("description"),
+    campaignType: text("campaign_type").notNull(), // 'quarterly', 'department', 'high_risk', 'admin', 'new_hire', 'departure'
+    frequency: text("frequency"), // 'quarterly', 'semi_annual', 'annual', 'one_time'
+
+    // Scope
+    scopeType: text("scope_type").notNull().default("all"), // 'all', 'department', 'apps', 'users'
+    scopeConfig: jsonb("scope_config").$type<Record<string, any>>(),
+
+    // Schedule
+    startDate: timestamp("start_date").notNull(),
+    dueDate: timestamp("due_date").notNull(),
+    autoApproveOnTimeout: boolean("auto_approve_on_timeout").default(false),
+
+    // Status tracking
+    status: text("status").notNull().default("draft"), // 'draft', 'active', 'completed', 'cancelled'
+    totalItems: integer("total_items").default(0),
+    reviewedItems: integer("reviewed_items").default(0),
+    approvedItems: integer("approved_items").default(0),
+    revokedItems: integer("revoked_items").default(0),
+    deferredItems: integer("deferred_items").default(0),
+
+    // Audit
+    createdBy: varchar("created_by").notNull(),
+    completedAt: timestamp("completed_at"),
+    completionReportUrl: text("completion_report_url"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_access_review_campaigns_tenant").on(table.tenantId),
+    idxStatus: index("idx_access_review_campaigns_status").on(table.tenantId, table.status),
+    idxDue: index("idx_access_review_campaigns_due").on(table.dueDate),
+  })
+);
+
+// Access Review Items
+export const accessReviewItems = pgTable(
+  "access_review_items",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    campaignId: varchar("campaign_id").notNull(),
+
+    // What to review
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    userDepartment: text("user_department"),
+    userManager: text("user_manager"),
+
+    appId: varchar("app_id").notNull(),
+    appName: text("app_name").notNull(),
+    accessType: text("access_type"),
+
+    // Context
+    grantedDate: timestamp("granted_date"),
+    lastUsedDate: timestamp("last_used_date"),
+    daysSinceLastUse: integer("days_since_last_use"),
+    businessJustification: text("business_justification"),
+    riskLevel: text("risk_level"), // 'low', 'medium', 'high', 'critical'
+
+    // Review
+    reviewerId: varchar("reviewer_id"),
+    reviewerName: text("reviewer_name"),
+    decision: text("decision").default("pending"), // 'pending', 'approved', 'revoked', 'deferred'
+    decisionNotes: text("decision_notes"),
+    reviewedAt: timestamp("reviewed_at"),
+
+    // Execution
+    executionStatus: text("execution_status").default("pending"), // 'pending', 'completed', 'failed'
+    executedAt: timestamp("executed_at"),
+    executionError: text("execution_error"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxCampaign: index("idx_access_review_items_campaign").on(table.campaignId),
+    idxReviewer: index("idx_access_review_items_reviewer").on(table.reviewerId, table.decision),
+    idxUser: index("idx_access_review_items_user").on(table.userId),
+    idxApp: index("idx_access_review_items_app").on(table.appId),
+  })
+);
+
+// Access Review Decisions
+export const accessReviewDecisions = pgTable(
+  "access_review_decisions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    campaignId: varchar("campaign_id").notNull(),
+    reviewItemId: varchar("review_item_id").notNull(),
+
+    // Decision
+    decision: text("decision").notNull(), // 'approved', 'revoked', 'deferred'
+    decisionNotes: text("decision_notes"),
+    decisionRationale: text("decision_rationale"),
+
+    // Reviewer
+    reviewerId: varchar("reviewer_id").notNull(),
+    reviewerName: text("reviewer_name").notNull(),
+    reviewerEmail: text("reviewer_email"),
+
+    // Execution
+    executionStatus: text("execution_status").default("pending"),
+    executedAt: timestamp("executed_at"),
+    executionResult: jsonb("execution_result").$type<Record<string, any>>(),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    idxCampaign: index("idx_access_review_decisions_campaign").on(table.campaignId),
+    idxItem: index("idx_access_review_decisions_item").on(table.reviewItemId),
+    idxReviewer: index("idx_access_review_decisions_reviewer").on(table.reviewerId),
+  })
+);
+
+// Role Templates
+export const roleTemplates = pgTable(
+  "role_templates",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // Role details
+    name: text("name").notNull(),
+    description: text("description"),
+    department: text("department"),
+    level: text("level"), // 'individual_contributor', 'manager', 'director', 'executive'
+
+    // Expected access
+    expectedApps: jsonb("expected_apps").$type<Array<{
+      appId: string;
+      appName: string;
+      accessType: string;
+      required: boolean;
+    }>>().notNull(),
+
+    // Metadata
+    userCount: integer("user_count").default(0),
+    isActive: boolean("is_active").default(true),
+
+    // Audit
+    createdBy: varchar("created_by").notNull(),
+    lastReviewedAt: timestamp("last_reviewed_at"),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_role_templates_tenant").on(table.tenantId),
+    idxDepartment: index("idx_role_templates_department").on(table.tenantId, table.department),
+    uniqTenantName: uniqueIndex("uniq_role_templates_tenant_name").on(table.tenantId, table.name),
+  })
+);
+
+// User Role Assignments
+export const userRoleAssignments = pgTable(
+  "user_role_assignments",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // Assignment
+    userId: varchar("user_id").notNull(),
+    roleTemplateId: varchar("role_template_id").notNull(),
+
+    // Tracking
+    effectiveDate: timestamp("effective_date").notNull().defaultNow(),
+    expiryDate: timestamp("expiry_date"),
+    assignedBy: varchar("assigned_by").notNull(),
+    assignmentReason: text("assignment_reason"),
+
+    // Review
+    nextReviewDate: timestamp("next_review_date"),
+    lastReviewedAt: timestamp("last_reviewed_at"),
+
+    // Status
+    isActive: boolean("is_active").default(true),
+
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_user_role_assignments_tenant").on(table.tenantId),
+    idxUser: index("idx_user_role_assignments_user").on(table.userId, table.isActive),
+    idxRole: index("idx_user_role_assignments_role").on(table.roleTemplateId),
+  })
+);
+
+// Privilege Drift Alerts
+export const privilegeDriftAlerts = pgTable(
+  "privilege_drift_alerts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // User and role
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    userDepartment: text("user_department"),
+    roleTemplateId: varchar("role_template_id"),
+    roleName: text("role_name"),
+
+    // Drift details
+    expectedApps: jsonb("expected_apps").$type<Array<{ appId: string; appName: string }>>(),
+    actualApps: jsonb("actual_apps").$type<Array<{ appId: string; appName: string }>>(),
+    excessApps: jsonb("excess_apps").$type<Array<{ appId: string; appName: string }>>(),
+    missingApps: jsonb("missing_apps").$type<Array<{ appId: string; appName: string }>>(),
+
+    // Risk assessment
+    riskScore: integer("risk_score").default(0),
+    riskLevel: text("risk_level"), // 'low', 'medium', 'high', 'critical'
+    riskFactors: jsonb("risk_factors").$type<string[]>(),
+
+    // Recommended actions
+    recommendedAction: text("recommended_action"),
+    recommendedAppsToRevoke: jsonb("recommended_apps_to_revoke").$type<Array<{ appId: string; appName: string }>>(),
+
+    // Status
+    status: text("status").default("open"), // 'open', 'in_review', 'resolved', 'deferred', 'false_positive'
+    resolutionNotes: text("resolution_notes"),
+    resolvedBy: varchar("resolved_by"),
+    resolvedAt: timestamp("resolved_at"),
+
+    // Timestamps
+    detectedAt: timestamp("detected_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_privilege_drift_alerts_tenant").on(table.tenantId),
+    idxUser: index("idx_privilege_drift_alerts_user").on(table.userId, table.status),
+    idxRisk: index("idx_privilege_drift_alerts_risk").on(table.tenantId, table.riskLevel, table.status),
+    idxDetected: index("idx_privilege_drift_alerts_detected").on(table.detectedAt),
+  })
+);
+
+// Overprivileged Accounts
+export const overprivilegedAccounts = pgTable(
+  "overprivileged_accounts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+
+    // User details
+    userId: varchar("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    userEmail: text("user_email"),
+    userDepartment: text("user_department"),
+    userTitle: text("user_title"),
+
+    // Overprivilege details
+    adminAppCount: integer("admin_app_count").default(0),
+    adminApps: jsonb("admin_apps").$type<Array<{
+      appId: string;
+      appName: string;
+      accessType: string;
+      grantedAt: string;
+      lastUsedAt: string;
+    }>>(),
+
+    // Stale access
+    staleAdminCount: integer("stale_admin_count").default(0),
+    staleAdminApps: jsonb("stale_admin_apps").$type<Array<{
+      appId: string;
+      appName: string;
+      daysSinceLastUse: number;
+    }>>(),
+
+    // Cross-department access
+    crossDeptAdminCount: integer("cross_dept_admin_count").default(0),
+    crossDeptAdminApps: jsonb("cross_dept_admin_apps").$type<Array<{
+      appId: string;
+      appName: string;
+      appCategory: string;
+    }>>(),
+
+    // Risk assessment
+    riskScore: integer("risk_score").default(0),
+    riskLevel: text("risk_level"), // 'low', 'medium', 'high', 'critical'
+    riskFactors: jsonb("risk_factors").$type<string[]>(),
+
+    // Business justification
+    hasJustification: boolean("has_justification").default(false),
+    justificationText: text("justification_text"),
+    justificationApprovedBy: varchar("justification_approved_by"),
+    justificationExpiresAt: timestamp("justification_expires_at"),
+
+    // Recommendations
+    recommendedAction: text("recommended_action"),
+    recommendedAppsToDowngrade: jsonb("recommended_apps_to_downgrade").$type<Array<{
+      appId: string;
+      appName: string;
+      currentAccess: string;
+      recommendedAccess: string;
+    }>>(),
+    leastPrivilegeAlternative: text("least_privilege_alternative"),
+
+    // Status
+    status: text("status").default("open"), // 'open', 'in_remediation', 'resolved', 'deferred', 'accepted_risk'
+    remediationPlan: text("remediation_plan"),
+    remediationDeadline: timestamp("remediation_deadline"),
+    resolvedBy: varchar("resolved_by"),
+    resolvedAt: timestamp("resolved_at"),
+    resolutionNotes: text("resolution_notes"),
+
+    // Timestamps
+    detectedAt: timestamp("detected_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_overprivileged_accounts_tenant").on(table.tenantId),
+    idxUser: index("idx_overprivileged_accounts_user").on(table.userId, table.status),
+    idxRisk: index("idx_overprivileged_accounts_risk").on(table.tenantId, table.riskLevel, table.status),
+    idxDetected: index("idx_overprivileged_accounts_detected").on(table.detectedAt),
+  })
+);
+
+// Validation schemas for Phase 5
+export const insertAccessReviewCampaignSchema = createInsertSchema(accessReviewCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAccessReviewItemSchema = createInsertSchema(accessReviewItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAccessReviewDecisionSchema = createInsertSchema(accessReviewDecisions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRoleTemplateSchema = createInsertSchema(roleTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserRoleAssignmentSchema = createInsertSchema(userRoleAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPrivilegeDriftAlertSchema = createInsertSchema(privilegeDriftAlerts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOverprivilegedAccountSchema = createInsertSchema(overprivilegedAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for Phase 5
+export type AccessReviewCampaign = typeof accessReviewCampaigns.$inferSelect;
+export type InsertAccessReviewCampaign = z.infer<typeof insertAccessReviewCampaignSchema>;
+export type AccessReviewItem = typeof accessReviewItems.$inferSelect;
+export type InsertAccessReviewItem = z.infer<typeof insertAccessReviewItemSchema>;
+export type AccessReviewDecision = typeof accessReviewDecisions.$inferSelect;
+export type InsertAccessReviewDecision = z.infer<typeof insertAccessReviewDecisionSchema>;
+export type RoleTemplate = typeof roleTemplates.$inferSelect;
+export type InsertRoleTemplate = z.infer<typeof insertRoleTemplateSchema>;
+export type UserRoleAssignment = typeof userRoleAssignments.$inferSelect;
+export type InsertUserRoleAssignment = z.infer<typeof insertUserRoleAssignmentSchema>;
+export type PrivilegeDriftAlert = typeof privilegeDriftAlerts.$inferSelect;
+export type InsertPrivilegeDriftAlert = z.infer<typeof insertPrivilegeDriftAlertSchema>;
+export type OverprivilegedAccount = typeof overprivilegedAccounts.$inferSelect;
+export type InsertOverprivilegedAccount = z.infer<typeof insertOverprivilegedAccountSchema>;
+
