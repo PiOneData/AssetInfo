@@ -13,6 +13,11 @@ import searchRoutes from "./search.routes";
 import notificationsRoutes from "./notifications.routes";
 import recommendationsRoutes from "./recommendations.routes";
 import aiRoutes from "./ai.routes";
+import orgRoutes from "./org.routes";
+import masterRoutes from "./master.routes";
+import syncRoutes from "./sync.routes";
+import auditLogsRoutes from "./audit-logs.routes";
+import geographicRoutes from "./geographic.routes";
 // Import other route modules as they are created
 // ... etc
 
@@ -60,6 +65,11 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/notifications", notificationsRoutes); // 1 route - Notifications
   app.use("/api/recommendations", recommendationsRoutes); // 3 routes - AI recommendations
   app.use("/api/ai", aiRoutes);                 // 2 routes - AI queries
+  app.use("/api/org", orgRoutes);               // 2 routes - Organization settings
+  app.use("/api/master", masterRoutes);         // 3 routes - Master data
+  app.use("/api/sync", syncRoutes);             // 1 route - Sync status
+  app.use("/api/audit-logs", auditLogsRoutes);  // 2 routes - Audit logs
+  app.use("/api/geographic", geographicRoutes); // 4 routes - Geographic data
 
   // ========================================
   // TODO: MIGRATE THESE ROUTES
@@ -68,11 +78,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   // ========================================
 
   // REMAINING ROUTES
-  // app.use("/api/audit-logs", auditLogsRoutes);  // 2 routes - Audit logs
-  // app.use("/api/org", orgRoutes);               // 2 routes - Organization settings
-  // app.use("/api/master", masterRoutes);         // 3 routes - Master data
   // app.use("/api/software", softwareRoutes);     // 2 routes - Software management
-  // app.use("/api/sync", syncRoutes);             // 2 routes - Sync status
   // app.use("/api/webhook", webhookRoutes);       // 1 route - Webhooks
   // app.use("/api/agent", agentRoutes);           // 1 route - Agent enrollment
   // app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
