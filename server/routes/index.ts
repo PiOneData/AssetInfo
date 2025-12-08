@@ -8,6 +8,11 @@ import ticketsRoutes from "./tickets.routes";
 import assetsRoutes from "./assets.routes";
 import vendorsRoutes from "./vendors.routes";
 import licensesRoutes from "./licenses.routes";
+import dashboardRoutes from "./dashboard.routes";
+import searchRoutes from "./search.routes";
+import notificationsRoutes from "./notifications.routes";
+import recommendationsRoutes from "./recommendations.routes";
+import aiRoutes from "./ai.routes";
 // Import other route modules as they are created
 // ... etc
 
@@ -50,6 +55,11 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/assets", assetsRoutes);         // 12 routes - Asset management
   app.use("/api/vendors", vendorsRoutes);       // 4 routes - Vendor management
   app.use("/api/licenses", licensesRoutes);     // 2 routes - License tracking
+  app.use("/api/dashboard", dashboardRoutes);   // 1 route - Dashboard metrics
+  app.use("/api/search", searchRoutes);         // 1 route - Global search
+  app.use("/api/notifications", notificationsRoutes); // 1 route - Notifications
+  app.use("/api/recommendations", recommendationsRoutes); // 3 routes - AI recommendations
+  app.use("/api/ai", aiRoutes);                 // 2 routes - AI queries
 
   // ========================================
   // TODO: MIGRATE THESE ROUTES
@@ -57,15 +67,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   // See /MIGRATION_GUIDE.md for instructions
   // ========================================
 
-  // MEDIUM PRIORITY
-  // app.use("/api/geographic", geographicRoutes); // 4 routes - Location data
-  // app.use("/api/recommendations", recommendationsRoutes); // 3 routes - AI recommendations
-
-  // LOW PRIORITY (Can migrate later)
-  // app.use("/api/ai", aiRoutes);                 // 2 routes - AI queries
-  // app.use("/api/dashboard", dashboardRoutes);   // 1 route - Dashboard metrics
-  // app.use("/api/search", searchRoutes);         // 1 route - Global search
-  // app.use("/api/notifications", notificationsRoutes); // 1 route - Notifications
+  // REMAINING ROUTES
   // app.use("/api/audit-logs", auditLogsRoutes);  // 2 routes - Audit logs
   // app.use("/api/org", orgRoutes);               // 2 routes - Organization settings
   // app.use("/api/master", masterRoutes);         // 3 routes - Master data
