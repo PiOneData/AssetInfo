@@ -78,6 +78,10 @@ import {
   ticketActivities,
   enrollmentTokens,
   enrollmentSessions,
+  // Network Monitoring tables
+  wifiDevices,
+  networkAlerts,
+  networkAgentKeys,
   // SaaS Governance tables (Phase 0)
   saasApps,
   saasContracts,
@@ -3360,6 +3364,148 @@ export class DatabaseStorage implements IStorage {
     }
 
     return token;
+  }
+
+  // Network Monitoring Methods
+  async getActiveWifiDevices(tenantId: string): Promise<any[]> {
+    return db.select()
+      .from(wifiDevices)
+      .where(and(
+        eq(wifiDevices.tenantId, tenantId),
+        eq(wifiDevices.isActive, true)
+      ))
+      .orderBy(desc(wifiDevices.lastSeen));
+  }
+
+  async upsertWifiDevice(deviceData: any): Promise<any> {
+    const { tenantId, macAddress } = deviceData;
+
+    // Try to find existing device
+    const [existing] = await db.select()
+      .from(wifiDevices)
+      .where(and(
+        eq(wifiDevices.tenantId, tenantId),
+        eq(wifiDevices.macAddress, macAddress)
+      ))
+      .limit(1);
+
+    if (existing) {
+      // Update existing device
+      const [updated] = await db.update(wifiDevices)
+        .set({
+          ipAddress: deviceData.ipAddress,
+          hostname: deviceData.hostname || existing.hostname,
+          manufacturer: deviceData.manufacturer || existing.manufacturer,
+          lastSeen: new Date(),
+          isActive: true,
+          connectionDuration: sql`${wifiDevices.connectionDuration} + ${deviceData.connectionDuration || 0}`,
+          metadata: deviceData.metadata || existing.metadata,
+          updatedAt: new Date(),
+        })
+        .where(eq(wifiDevices.id, existing.id))
+        .returning();
+
+      return updated;
+    } else {
+      // Insert new device
+      const [inserted] = await db.insert(wifiDevices)
+        .values({
+          ...deviceData,
+          firstSeen: new Date(),
+          lastSeen: new Date(),
+          isActive: true,
+        })
+        .returning();
+
+      // Create alert for new unauthorized device
+      if (!deviceData.isAuthorized) {
+        await this.createNetworkAlert({
+          tenantId,
+          macAddress: deviceData.macAddress,
+          ipAddress: deviceData.ipAddress,
+          hostname: deviceData.hostname,
+          manufacturer: deviceData.manufacturer,
+          deviceInfo: deviceData.metadata || {},
+        });
+      }
+
+      return inserted;
+    }
+  }
+
+  async getNetworkAlerts(tenantId: string, status?: string): Promise<any[]> {
+    const conditions = [eq(networkAlerts.tenantId, tenantId)];
+    if (status) {
+      conditions.push(eq(networkAlerts.status, status));
+    }
+
+    return db.select()
+      .from(networkAlerts)
+      .where(and(...conditions))
+      .orderBy(desc(networkAlerts.detectedAt));
+  }
+
+  async createNetworkAlert(alertData: any): Promise<any> {
+    const [alert] = await db.insert(networkAlerts)
+      .values({
+        ...alertData,
+        status: 'new',
+        detectedAt: new Date(),
+      })
+      .returning();
+
+    return alert;
+  }
+
+  async acknowledgeNetworkAlert(alertId: number, userId: string, notes?: string): Promise<any> {
+    const [alert] = await db.update(networkAlerts)
+      .set({
+        status: 'acknowledged',
+        acknowledgedAt: new Date(),
+        acknowledgedBy: userId,
+        notes: notes || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(networkAlerts.id, alertId))
+      .returning();
+
+    return alert;
+  }
+
+  async generateNetworkAgentKey(tenantId: string, agentName: string, createdBy?: string): Promise<any> {
+    const apiKey = randomUUID();
+
+    const [key] = await db.insert(networkAgentKeys)
+      .values({
+        tenantId,
+        apiKey,
+        agentName,
+        description: `API key for ${agentName}`,
+        isActive: true,
+        createdBy,
+      })
+      .returning();
+
+    return key;
+  }
+
+  async validateNetworkAgentKey(apiKey: string): Promise<any> {
+    const [key] = await db.select()
+      .from(networkAgentKeys)
+      .where(and(
+        eq(networkAgentKeys.apiKey, apiKey),
+        eq(networkAgentKeys.isActive, true)
+      ))
+      .limit(1);
+
+    if (key) {
+      // Update last used timestamp
+      await db.update(networkAgentKeys)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(networkAgentKeys.id, key.id));
+    }
+
+    return key;
   }
 }
 

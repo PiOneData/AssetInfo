@@ -1578,6 +1578,82 @@ export const enrollmentTokens = pgTable(
   })
 );
 
+// Network Monitoring Tables - WiFi device tracking and alerts
+export const wifiDevices = pgTable(
+  "wifi_devices",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: varchar("tenant_id").notNull(),
+    macAddress: varchar("mac_address").notNull(),
+    ipAddress: varchar("ip_address").notNull(),
+    hostname: text("hostname"),
+    manufacturer: text("manufacturer"),
+    assetId: varchar("asset_id"),
+    assetName: text("asset_name"),
+    isAuthorized: boolean("is_authorized").default(false),
+    firstSeen: timestamp("first_seen").defaultNow(),
+    lastSeen: timestamp("last_seen").defaultNow(),
+    isActive: boolean("is_active").default(true),
+    connectionDuration: integer("connection_duration").default(0),
+    deviceType: text("device_type"),
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_wifi_devices_tenant").on(table.tenantId),
+    idxMac: index("idx_wifi_devices_mac").on(table.macAddress),
+    idxActive: index("idx_wifi_devices_active").on(table.tenantId, table.isActive),
+    uniqueTenantMac: uniqueIndex("uniq_wifi_devices_tenant_mac").on(table.tenantId, table.macAddress),
+  })
+);
+
+export const networkAlerts = pgTable(
+  "network_alerts",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: varchar("tenant_id").notNull(),
+    macAddress: varchar("mac_address").notNull(),
+    ipAddress: varchar("ip_address").notNull(),
+    hostname: text("hostname"),
+    manufacturer: text("manufacturer"),
+    detectedAt: timestamp("detected_at").defaultNow(),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    acknowledgedBy: varchar("acknowledged_by"),
+    status: text("status").notNull().default("new"), // 'new', 'acknowledged', 'resolved'
+    notes: text("notes"),
+    deviceInfo: jsonb("device_info").$type<Record<string, any>>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_network_alerts_tenant").on(table.tenantId),
+    idxStatus: index("idx_network_alerts_status").on(table.tenantId, table.status),
+    idxDetected: index("idx_network_alerts_detected").on(table.detectedAt),
+  })
+);
+
+// API Keys for Network Agents
+export const networkAgentKeys = pgTable(
+  "network_agent_keys",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    apiKey: varchar("api_key").notNull().unique(),
+    agentName: text("agent_name").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true),
+    lastUsedAt: timestamp("last_used_at"),
+    createdBy: varchar("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_network_agent_keys_tenant").on(table.tenantId),
+    idxApiKey: index("idx_network_agent_keys_api_key").on(table.apiKey),
+  })
+);
+
 // Validation Schemas for Phase 3
 export const insertOffboardingPlaybookSchema = createInsertSchema(offboardingPlaybooks).omit({
   id: true,
