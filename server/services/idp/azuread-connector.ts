@@ -343,11 +343,164 @@ export class AzureADConnector extends IdPConnector {
   }
 
   /**
-   * Sync users from Azure AD (placeholder for Phase 1)
+   * Sync users from Azure AD
    */
   async syncUsers(): Promise<{ usersAdded: number; usersUpdated: number }> {
-    // Placeholder - will implement in future phase if needed
-    console.log('[AzureAD] User sync not implemented in Phase 1');
-    return { usersAdded: 0, usersUpdated: 0 };
+    try {
+      console.log('[AzureAD] Starting user sync...');
+      let usersAdded = 0;
+      let usersUpdated = 0;
+
+      // Fetch all users from Azure AD
+      const response = await this.client.api('/users').get();
+      const azureUsers = response.value || [];
+
+      console.log(`[AzureAD] Found ${azureUsers.length} users in Azure AD`);
+
+      for (const azureUser of azureUsers) {
+        try {
+          const email = azureUser.mail || azureUser.userPrincipalName;
+          if (!email) {
+            console.log(`[AzureAD] Skipping user without email: ${azureUser.displayName}`);
+            continue;
+          }
+
+          // Check if user already exists
+          const existingUser = await this.storage.getUserByEmail(email, this.tenantId);
+
+          if (existingUser) {
+            // Update existing user
+            await this.storage.updateUser(existingUser.id, {
+              name: azureUser.displayName || existingUser.name,
+              firstName: azureUser.givenName || existingUser.firstName,
+              lastName: azureUser.surname || existingUser.lastName,
+              department: azureUser.department || existingUser.department,
+              jobTitle: azureUser.jobTitle || existingUser.jobTitle,
+              updatedAt: new Date(),
+            });
+            usersUpdated++;
+          } else {
+            // Create new user
+            await this.storage.createUser({
+              tenantId: this.tenantId,
+              email,
+              name: azureUser.displayName || email,
+              firstName: azureUser.givenName || '',
+              lastName: azureUser.surname || '',
+              department: azureUser.department || null,
+              jobTitle: azureUser.jobTitle || null,
+              role: 'user',
+              status: azureUser.accountEnabled ? 'active' : 'inactive',
+              password: '', // No password for SSO users
+            });
+            usersAdded++;
+          }
+        } catch (userError) {
+          console.error(`[AzureAD] Error syncing user ${azureUser.mail}:`, userError);
+        }
+      }
+
+      console.log(`[AzureAD] User sync complete: ${usersAdded} added, ${usersUpdated} updated`);
+      return { usersAdded, usersUpdated };
+    } catch (error) {
+      console.error('[AzureAD] Error syncing users:', error);
+      throw new Error(`Failed to sync Azure AD users: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get user's group memberships
+   */
+  async getUserGroups(userEmail: string): Promise<Array<{ id: string; displayName: string }>> {
+    try {
+      await this.authenticate();
+
+      // Get user by email
+      const userResponse = await this.client
+        .api('/users')
+        .filter(`mail eq '${userEmail}' or userPrincipalName eq '${userEmail}'`)
+        .get();
+
+      if (!userResponse.value || userResponse.value.length === 0) {
+        console.log(`[AzureAD] User not found: ${userEmail}`);
+        return [];
+      }
+
+      const userId = userResponse.value[0].id;
+
+      // Get user's group memberships
+      const groupsResponse = await this.client
+        .api(`/users/${userId}/memberOf`)
+        .get();
+
+      const groups = groupsResponse.value
+        .filter((item: any) => item['@odata.type'] === '#microsoft.graph.group')
+        .map((group: any) => ({
+          id: group.id,
+          displayName: group.displayName,
+        }));
+
+      console.log(`[AzureAD] Found ${groups.length} groups for user ${userEmail}`);
+      return groups;
+    } catch (error) {
+      console.error(`[AzureAD] Error getting user groups:`, error);
+      throw new Error(`Failed to get user groups: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Remove user from a group
+   */
+  async removeUserFromGroup(userEmail: string, groupId: string): Promise<void> {
+    try {
+      await this.authenticate();
+
+      // Get user by email
+      const userResponse = await this.client
+        .api('/users')
+        .filter(`mail eq '${userEmail}' or userPrincipalName eq '${userEmail}'`)
+        .get();
+
+      if (!userResponse.value || userResponse.value.length === 0) {
+        throw new Error(`User not found: ${userEmail}`);
+      }
+
+      const userId = userResponse.value[0].id;
+
+      // Remove user from group
+      await this.client
+        .api(`/groups/${groupId}/members/${userId}/$ref`)
+        .delete();
+
+      console.log(`[AzureAD] Removed user ${userEmail} from group ${groupId}`);
+    } catch (error) {
+      console.error(`[AzureAD] Error removing user from group:`, error);
+      throw new Error(`Failed to remove user from group: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Remove user from all groups
+   */
+  async removeUserFromAllGroups(userEmail: string): Promise<number> {
+    try {
+      const groups = await this.getUserGroups(userEmail);
+
+      let removedCount = 0;
+      for (const group of groups) {
+        try {
+          await this.removeUserFromGroup(userEmail, group.id);
+          removedCount++;
+        } catch (error) {
+          console.warn(`[AzureAD] Failed to remove user from group ${group.displayName}:`, error);
+        }
+      }
+
+      console.log(`[AzureAD] Removed user ${userEmail} from ${removedCount} groups`);
+      return removedCount;
+    } catch (error) {
+      console.error(`[AzureAD] Error removing user from all groups:`, error);
+      throw new Error(`Failed to remove user from all groups: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 }
