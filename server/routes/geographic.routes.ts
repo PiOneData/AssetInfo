@@ -159,29 +159,32 @@ router.get("/coordinates", authenticateToken, async (req: Request, res: Response
 
     const coordinates: any = {};
 
-    // Get country coordinates
+    // Get country coordinates - indexed by country name
     if (fs.existsSync(countriesPath)) {
       const countriesData = JSON.parse(fs.readFileSync(countriesPath, 'utf8'));
       countriesData.forEach((country: any) => {
-        if (country.latitude && country.longitude) {
-          coordinates[`country-${country.id}`] = {
+        if (country.latitude && country.longitude && country.name) {
+          // Use country name as key (e.g., "India")
+          coordinates[country.name] = {
             lat: parseFloat(country.latitude),
             lng: parseFloat(country.longitude),
-            name: country.name
+            type: 'country'
           };
         }
       });
     }
 
-    // Get state coordinates
+    // Get state coordinates - indexed by "CountryName,StateName"
     if (fs.existsSync(statesPath)) {
       const statesData = JSON.parse(fs.readFileSync(statesPath, 'utf8'));
       statesData.forEach((state: any) => {
-        if (state.latitude && state.longitude) {
-          coordinates[`state-${state.id}`] = {
+        if (state.latitude && state.longitude && state.name && state.country_name) {
+          // Use "CountryName,StateName" as key (e.g., "India,Maharashtra")
+          const key = `${state.country_name},${state.name}`;
+          coordinates[key] = {
             lat: parseFloat(state.latitude),
             lng: parseFloat(state.longitude),
-            name: state.name
+            type: 'state'
           };
         }
       });
