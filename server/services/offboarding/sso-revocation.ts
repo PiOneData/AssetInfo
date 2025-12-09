@@ -11,6 +11,7 @@
 import { storage } from '../../storage';
 import { AzureADConnector } from '../idp/azuread-connector';
 import { GoogleWorkspaceConnector } from '../idp/google-connector';
+import { decrypt } from '../encryption';
 
 export interface RevocationResult {
   success: boolean;
@@ -175,10 +176,10 @@ export class SSORevocationService {
 
     try {
       const user = await storage.getUser(userId);
-      if (!user) {
+      if (!user || !user.email) {
         return {
           success: false,
-          message: 'User not found'
+          message: 'User not found or has no email'
         };
       }
 
@@ -191,12 +192,36 @@ export class SSORevocationService {
         try {
           if (idp.type === 'azuread') {
             // Remove from Azure AD groups
-            console.log(`[SSO Revocation] Would remove from Azure AD groups: ${user.email}`);
-            results.azuread = { groupsRemoved: 0, message: 'Simulated removal' };
+            console.log(`[SSO Revocation] Removing from Azure AD groups: ${user.email}`);
+
+            const config = {
+              clientId: idp.clientId || '',
+              clientSecret: idp.clientSecret ? decrypt(idp.clientSecret) : '',
+              tenantDomain: idp.tenantDomain || '',
+              scopes: [],
+              customConfig: {}
+            };
+
+            const connector = new AzureADConnector(config, this.tenantId, idp.id);
+            const groupsRemoved = await connector.removeUserFromAllGroups(user.email);
+
+            results.azuread = { groupsRemoved, message: 'Successfully removed from groups' };
           } else if (idp.type === 'google') {
             // Remove from Google groups
-            console.log(`[SSO Revocation] Would remove from Google groups: ${user.email}`);
-            results.google = { groupsRemoved: 0, message: 'Simulated removal' };
+            console.log(`[SSO Revocation] Removing from Google groups: ${user.email}`);
+
+            const config = {
+              clientId: idp.clientId || '',
+              clientSecret: idp.clientSecret ? decrypt(idp.clientSecret) : '',
+              tenantDomain: idp.tenantDomain || '',
+              scopes: [],
+              customConfig: {}
+            };
+
+            const connector = new GoogleWorkspaceConnector(config, this.tenantId, idp.id);
+            const groupsRemoved = await connector.removeUserFromAllGroups(user.email);
+
+            results.google = { groupsRemoved, message: 'Successfully removed from groups' };
           }
         } catch (error: any) {
           console.warn(`[SSO Revocation] Failed to remove from ${idp.type} groups:`, error.message);

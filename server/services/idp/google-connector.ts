@@ -276,12 +276,75 @@ export class GoogleWorkspaceConnector extends IdPConnector {
   }
 
   /**
-   * Sync users from Google Workspace (placeholder for Phase 1)
+   * Sync users from Google Workspace
    */
   async syncUsers(): Promise<{ usersAdded: number; usersUpdated: number }> {
-    // Placeholder - will implement in future phase if needed
-    console.log('[Google] User sync not implemented in Phase 1');
-    return { usersAdded: 0, usersUpdated: 0 };
+    try {
+      console.log('[Google] Starting user sync...');
+      let usersAdded = 0;
+      let usersUpdated = 0;
+
+      const auth = await this.getAuth();
+      const admin = google.admin({ version: 'directory_v1', auth });
+
+      // Fetch all users from Google Workspace
+      const response = await admin.users.list({
+        customer: 'my_customer',
+        maxResults: 500,
+        orderBy: 'email',
+      });
+
+      const googleUsers = response.data.users || [];
+      console.log(`[Google] Found ${googleUsers.length} users in Google Workspace`);
+
+      for (const googleUser of googleUsers) {
+        try {
+          const email = googleUser.primaryEmail;
+          if (!email) {
+            console.log(`[Google] Skipping user without email`);
+            continue;
+          }
+
+          // Check if user already exists
+          const existingUser = await this.storage.getUserByEmail(email, this.tenantId);
+
+          const name = googleUser.name;
+          if (existingUser) {
+            // Update existing user
+            await this.storage.updateUser(existingUser.id, {
+              name: name?.fullName || existingUser.name,
+              firstName: name?.givenName || existingUser.firstName,
+              lastName: name?.familyName || existingUser.lastName,
+              department: googleUser.orgUnitPath || existingUser.department,
+              updatedAt: new Date(),
+            });
+            usersUpdated++;
+          } else {
+            // Create new user
+            await this.storage.createUser({
+              tenantId: this.tenantId,
+              email,
+              name: name?.fullName || email,
+              firstName: name?.givenName || '',
+              lastName: name?.familyName || '',
+              department: googleUser.orgUnitPath || null,
+              role: 'user',
+              status: googleUser.suspended ? 'inactive' : 'active',
+              password: '', // No password for SSO users
+            });
+            usersAdded++;
+          }
+        } catch (userError) {
+          console.error(`[Google] Error syncing user ${googleUser.primaryEmail}:`, userError);
+        }
+      }
+
+      console.log(`[Google] User sync complete: ${usersAdded} added, ${usersUpdated} updated`);
+      return { usersAdded, usersUpdated };
+    } catch (error) {
+      console.error('[Google] Error syncing users:', error);
+      throw new Error(`Failed to sync Google Workspace users: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -302,6 +365,77 @@ export class GoogleWorkspaceConnector extends IdPConnector {
     } catch (error) {
       console.error(`[Google] Failed to revoke token:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Get user's group memberships
+   */
+  async getUserGroups(userEmail: string): Promise<Array<{ id: string; name: string; email: string }>> {
+    try {
+      const auth = await this.getAuth();
+      const admin = google.admin({ version: 'directory_v1', auth });
+
+      const response = await admin.groups.list({
+        userKey: userEmail,
+      });
+
+      const groups = (response.data.groups || []).map((group: any) => ({
+        id: group.id || '',
+        name: group.name || '',
+        email: group.email || '',
+      }));
+
+      console.log(`[Google] Found ${groups.length} groups for user ${userEmail}`);
+      return groups;
+    } catch (error) {
+      console.error(`[Google] Error getting user groups:`, error);
+      throw new Error(`Failed to get user groups: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Remove user from a group
+   */
+  async removeUserFromGroup(userEmail: string, groupId: string): Promise<void> {
+    try {
+      const auth = await this.getAuth();
+      const admin = google.admin({ version: 'directory_v1', auth });
+
+      await admin.members.delete({
+        groupKey: groupId,
+        memberKey: userEmail,
+      });
+
+      console.log(`[Google] Removed user ${userEmail} from group ${groupId}`);
+    } catch (error) {
+      console.error(`[Google] Error removing user from group:`, error);
+      throw new Error(`Failed to remove user from group: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Remove user from all groups
+   */
+  async removeUserFromAllGroups(userEmail: string): Promise<number> {
+    try {
+      const groups = await this.getUserGroups(userEmail);
+
+      let removedCount = 0;
+      for (const group of groups) {
+        try {
+          await this.removeUserFromGroup(userEmail, group.id);
+          removedCount++;
+        } catch (error) {
+          console.warn(`[Google] Failed to remove user from group ${group.name}:`, error);
+        }
+      }
+
+      console.log(`[Google] Removed user ${userEmail} from ${removedCount} groups`);
+      return removedCount;
+    } catch (error) {
+      console.error(`[Google] Error removing user from all groups:`, error);
+      throw new Error(`Failed to remove user from all groups: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

@@ -328,14 +328,60 @@ export class ShadowITDetector {
   ): Promise<number> {
     let accessCreated = 0;
 
-    // TODO: Implement user access processing
-    // This will require:
-    // 1. Mapping externalId to internal appId
-    // 2. Mapping userId to internal user records
-    // 3. Creating/updating user_app_access records
+    for (const access of userAccessList) {
+      try {
+        // 1. Map externalId to internal appId
+        const app = await this.storage.getSaasAppByExternalId(access.externalId, this.tenantId);
+        if (!app) {
+          console.log(`[ShadowIT] App not found for external ID: ${access.externalId}, skipping access grant`);
+          continue;
+        }
 
-    console.log(`[ShadowIT] User access processing: ${userAccessList.length} grants (implementation pending)`);
+        // 2. Map userId to internal user record
+        const user = await this.storage.getUserByEmail(access.userEmail, this.tenantId);
+        if (!user) {
+          console.log(`[ShadowIT] User not found: ${access.userEmail}, skipping access grant`);
+          continue;
+        }
 
+        // 3. Check if access already exists
+        const existingAccess = await this.storage.getUserAppAccessByUserAndApp(
+          user.id,
+          app.id,
+          this.tenantId
+        );
+
+        if (existingAccess) {
+          // Update existing access
+          await this.storage.updateUserAppAccess(existingAccess.id, {
+            lastAccessDate: access.lastAccessDate ? new Date(access.lastAccessDate) : new Date(),
+            permissions: access.permissions || existingAccess.permissions,
+            roles: access.roles || existingAccess.roles,
+            assignmentMethod: 'idp_sync',
+            updatedAt: new Date(),
+          });
+        } else {
+          // Create new access record
+          await this.storage.createUserAppAccess({
+            tenantId: this.tenantId,
+            userId: user.id,
+            appId: app.id,
+            accessGrantedDate: access.grantedDate ? new Date(access.grantedDate) : new Date(),
+            lastAccessDate: access.lastAccessDate ? new Date(access.lastAccessDate) : null,
+            permissions: access.permissions || [],
+            roles: access.roles || [],
+            assignmentMethod: 'idp_sync',
+            assignedBy: idpId,
+            status: 'active',
+          });
+          accessCreated++;
+        }
+      } catch (error) {
+        console.error(`[ShadowIT] Error processing user access for ${access.userEmail}:`, error);
+      }
+    }
+
+    console.log(`[ShadowIT] User access processing complete: ${accessCreated} new grants created`);
     return accessCreated;
   }
 
@@ -348,15 +394,84 @@ export class ShadowITDetector {
   ): Promise<number> {
     let tokensCreated = 0;
 
-    // TODO: Implement OAuth token processing
-    // This will require:
-    // 1. Mapping externalId to internal appId
-    // 2. Mapping userId to internal user records
-    // 3. Risk assessment of scopes
-    // 4. Creating/updating oauth_tokens records
+    for (const token of tokens) {
+      try {
+        // 1. Map externalId to internal appId
+        const app = await this.storage.getSaasAppByExternalId(token.externalId, this.tenantId);
+        if (!app) {
+          console.log(`[ShadowIT] App not found for external ID: ${token.externalId}, skipping OAuth token`);
+          continue;
+        }
 
-    console.log(`[ShadowIT] OAuth token processing: ${tokens.length} tokens (implementation pending)`);
+        // 2. Map userId to internal user record
+        const user = await this.storage.getUserByEmail(token.userEmail, this.tenantId);
+        if (!user) {
+          console.log(`[ShadowIT] User not found: ${token.userEmail}, skipping OAuth token`);
+          continue;
+        }
 
+        // 3. Risk assessment of scopes
+        const scopes = token.scopes || [];
+        let riskLevel = 'low';
+        const riskyScopes = ['write', 'delete', 'admin', 'full_control', 'manage', 'owner'];
+
+        if (scopes.some(scope => riskyScopes.some(risky => scope.toLowerCase().includes(risky)))) {
+          riskLevel = 'high';
+        } else if (scopes.length > 5) {
+          riskLevel = 'medium';
+        }
+
+        // Check for excessive permissions
+        const excessivePermissions = scopes.length > 10;
+
+        // 4. Check if token already exists
+        const existing = await this.storage.getOAuthTokenByUserAndApp(
+          user.id,
+          app.id,
+          this.tenantId
+        );
+
+        if (existing) {
+          // Update existing token
+          await this.storage.updateOAuthToken(existing.id, {
+            scopes,
+            riskLevel,
+            excessivePermissions,
+            lastUsed: token.lastUsed ? new Date(token.lastUsed) : new Date(),
+            expiresAt: token.expiresAt ? new Date(token.expiresAt) : null,
+            idpMetadata: {
+              idpId,
+              tokenId: token.tokenId,
+            },
+            updatedAt: new Date(),
+          });
+        } else {
+          // Create new token record
+          await this.storage.createOAuthToken({
+            tenantId: this.tenantId,
+            userId: user.id,
+            appId: app.id,
+            tokenHash: token.tokenId || `token_${Date.now()}`, // Use hash in production
+            scopes,
+            riskLevel,
+            excessivePermissions,
+            grantedAt: token.grantedAt ? new Date(token.grantedAt) : new Date(),
+            lastUsed: token.lastUsed ? new Date(token.lastUsed) : null,
+            expiresAt: token.expiresAt ? new Date(token.expiresAt) : null,
+            status: 'active',
+            idpMetadata: {
+              idpId,
+              tokenId: token.tokenId,
+            },
+          });
+          tokensCreated++;
+        }
+      } catch (error) {
+        console.error(`[ShadowIT] Error processing OAuth token for ${token.userEmail}:`, error);
+      }
+    }
+
+    console.log(`[ShadowIT] OAuth token processing complete: ${tokensCreated} new tokens created`);
     return tokensCreated;
   }
 

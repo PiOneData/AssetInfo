@@ -9,6 +9,7 @@
  */
 
 import { storage } from '../../storage';
+import { decrypt } from '../encryption';
 
 export interface OAuthRevocationResult {
   success: boolean;
@@ -74,23 +75,152 @@ export class OAuthRevocationService {
   private async revokeToken(token: any): Promise<void> {
     console.log(`[OAuth Revocation] Revoking token for ${token.appName}`);
 
-    // In a real implementation, this would make API calls to revoke the token
-    // For Azure AD, Google, etc., each platform has its own revocation endpoint
+    // Get IdP information from token metadata
+    const idpId = token.idpMetadata?.idpId;
+    const idpTokenId = token.idpMetadata?.tokenId || token.idpTokenId;
 
-    // Example for Azure AD:
-    // POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/revoke
-    // Content-Type: application/x-www-form-urlencoded
-    // token={token}&token_type_hint=access_token
+    if (idpId) {
+      try {
+        // Get IdP configuration
+        const idp = await storage.getIdentityProvider(idpId, this.tenantId);
 
-    // Example for Google:
-    // POST https://oauth2.googleapis.com/revoke
-    // Content-Type: application/x-www-form-urlencoded
-    // token={token}
+        if (idp && idp.status === 'active') {
+          console.log(`[OAuth Revocation] Revoking via ${idp.type} provider: ${idp.name}`);
 
-    // For now, we'll just delete from our database
+          // Revoke at the provider level
+          switch (idp.type) {
+            case 'azuread':
+              await this.revokeAzureADToken(idp, idpTokenId);
+              break;
+
+            case 'google':
+              await this.revokeGoogleToken(idp, idpTokenId);
+              break;
+
+            case 'okta':
+              await this.revokeOktaToken(idp, idpTokenId);
+              break;
+
+            default:
+              console.log(`[OAuth Revocation] Provider type ${idp.type} not supported for revocation`);
+          }
+        }
+      } catch (error: any) {
+        console.error(`[OAuth Revocation] Failed to revoke at provider:`, error);
+        // Continue to delete from local database even if provider revocation fails
+      }
+    }
+
+    // Always delete from our database
     await storage.deleteOauthToken(token.id, this.tenantId);
 
     console.log(`[OAuth Revocation] Token revoked for ${token.appName}`);
+  }
+
+  /**
+   * Revoke Azure AD OAuth token
+   */
+  private async revokeAzureADToken(idp: any, tokenId?: string): Promise<void> {
+    if (!tokenId) {
+      console.log(`[OAuth Revocation] No token ID available for Azure AD revocation`);
+      return;
+    }
+
+    const tenantDomain = idp.tenantDomain || 'common';
+    const url = `https://login.microsoftonline.com/${tenantDomain}/oauth2/v2.0/revoke`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          token: tokenId,
+          token_type_hint: 'access_token',
+        }).toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Azure AD revocation failed: ${response.status} ${response.statusText}`);
+      }
+
+      console.log(`[OAuth Revocation] Successfully revoked Azure AD token`);
+    } catch (error: any) {
+      console.error(`[OAuth Revocation] Azure AD revocation error:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revoke Google OAuth token
+   */
+  private async revokeGoogleToken(idp: any, tokenId?: string): Promise<void> {
+    if (!tokenId) {
+      console.log(`[OAuth Revocation] No token ID available for Google revocation`);
+      return;
+    }
+
+    const url = 'https://oauth2.googleapis.com/revoke';
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          token: tokenId,
+        }).toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google revocation failed: ${response.status} ${response.statusText}`);
+      }
+
+      console.log(`[OAuth Revocation] Successfully revoked Google token`);
+    } catch (error: any) {
+      console.error(`[OAuth Revocation] Google revocation error:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revoke Okta OAuth token
+   */
+  private async revokeOktaToken(idp: any, tokenId?: string): Promise<void> {
+    if (!tokenId || !idp.tenantDomain) {
+      console.log(`[OAuth Revocation] Missing token ID or domain for Okta revocation`);
+      return;
+    }
+
+    // Decrypt client secret if needed for authentication
+    const apiToken = idp.clientSecret ? decrypt(idp.clientSecret) : '';
+
+    const url = `https://${idp.tenantDomain}/oauth2/v1/revoke`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `SSWS ${apiToken}`,
+        },
+        body: new URLSearchParams({
+          token: tokenId,
+          token_type_hint: 'access_token',
+        }).toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Okta revocation failed: ${response.status} ${response.statusText}`);
+      }
+
+      console.log(`[OAuth Revocation] Successfully revoked Okta token`);
+    } catch (error: any) {
+      console.error(`[OAuth Revocation] Okta revocation error:`, error);
+      throw error;
+    }
   }
 
   /**

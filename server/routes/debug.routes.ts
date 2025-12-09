@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../db";
 import * as s from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { authenticateToken, requireRole } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const router = Router();
  *       200:
  *         description: Device specifications debug info
  */
-router.get("/devices-specs", async (req: Request, res: Response) => {
+router.get("/devices-specs", authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const devices = await db
       .select()
