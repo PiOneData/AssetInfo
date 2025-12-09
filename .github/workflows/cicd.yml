@@ -64,11 +64,42 @@ jobs:
             PRODUCTION_URL=${{ secrets.PRODUCTION_URL }}
             EOF
             
-            echo "📝 Creating docker-compose.override.yml for custom image..."
-            cat > docker-compose.override.yml << EOF
+            echo "📝 Creating docker-compose.yml file..."
+            cat > docker-compose.yml << EOF
             services:
               app:
                 image: $APP_IMAGE
+                env_file:
+                  - .env
+                ports:
+                  - "5926:5926"
+                restart: unless-stopped
+                environment:
+                  - NODE_ENV=production
+                  - PORT=5926
+                depends_on:
+                  - db
+                healthcheck:
+                  test: ["CMD", "wget", "-qO-", "http://localhost:5926/api/health"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+            
+              db:
+                image: postgres:15-alpine
+                environment:
+                  POSTGRES_USER: asset
+                  POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                  POSTGRES_DB: assetnext
+                ports:
+                  - "5928:5432"
+                volumes:
+                  - pgdata:/var/lib/postgresql/data
+                restart: unless-stopped
+            
+            volumes:
+              pgdata:
+                driver: local
             EOF
             
             echo "🚀 Starting services with docker-compose..."
