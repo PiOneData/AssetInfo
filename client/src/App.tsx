@@ -32,6 +32,10 @@ import DiscoveryDashboard from "@/pages/discovery-dashboard";
 import SpendDashboard from "@/pages/spend-dashboard";
 import AccessReviews from "@/pages/access-reviews";
 import AccessReviewDetail from "@/pages/access-review-detail";
+import AccessRequests from "@/pages/access-requests";
+import JitAccess from "@/pages/jit-access";
+import SodManagement from "@/pages/sod-management";
+import AnomalyDetection from "@/pages/anomaly-detection";
 import { ThemeProvider } from "@/contexts/theme-context";
 
 function Router() {
@@ -196,6 +200,26 @@ function Router() {
       <Route path="/access-reviews/:id">
         <ProtectedRoute requiredRole="admin">
           <AccessReviewDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/access-requests">
+        <ProtectedRoute requiredRole="technician">
+          <AccessRequests />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/jit-access">
+        <ProtectedRoute requiredRole="technician">
+          <JitAccess />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/sod-management">
+        <ProtectedRoute requiredRole="admin">
+          <SodManagement />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/anomaly-detection">
+        <ProtectedRoute requiredRole="admin">
+          <AnomalyDetection />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />
