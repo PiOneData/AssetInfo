@@ -17,7 +17,6 @@ jobs:
       - name: 🔑 Log in to GitHub Container Registry
         run: |
           echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
-
       - name: 🏗️ Build and push app image
         run: |
           USERNAME=$(echo "${{ secrets.GHCR_USERNAME }}" | tr '[:upper:]' '[:lower:]')
@@ -25,8 +24,7 @@ jobs:
           echo "📦 Building image: $IMAGE_NAME"
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
-
-      - name: 🚀 Deploy to remote server using docker-compose
+      - name: 🚀 Deploy to remote server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -36,85 +34,50 @@ jobs:
             set -e
             USERNAME=$(echo "${{ secrets.GHCR_USERNAME }}" | tr '[:upper:]' '[:lower:]')
             APP_IMAGE=ghcr.io/$USERNAME/assetnext:latest
-            
-            echo "🧹 Stopping existing containers..."
-            docker-compose down || true
-            
-            echo "🧹 Cleaning up old images..."
-            docker image prune -f || true
-            
+            DB_CONTAINER=assetnext_db
+            APP_CONTAINER=assetnext_app
+            NETWORK_NAME=asset_network
+            echo "🧹 Stopping existing containers (if any)..."
+            docker stop $APP_CONTAINER || true
+            docker rm $APP_CONTAINER || true
+            docker stop $DB_CONTAINER || true
+            docker rm $DB_CONTAINER || true
+            echo "🌐 Creating Docker network..."
+            docker network create $NETWORK_NAME || true
             echo "📦 Pulling latest app image..."
             docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }}
             docker pull $APP_IMAGE
-            
-            echo "📝 Creating .env file..."
-            cat > .env << 'EOF'
-            NODE_ENV=production
-            PORT=5926
-            HOST=0.0.0.0
-            SESSION_SECRET=${{ secrets.SESSION_SECRET }}
-            DATABASE_URL=postgresql://asset:${{ secrets.DB_PASSWORD }}@db:5432/assetnext
-            POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
-            OA_BASE_URL=${{ secrets.OA_BASE_URL }}
-            OA_USERNAME=${{ secrets.OA_USERNAME }}
-            OA_PASSWORD=${{ secrets.OA_PASSWORD }}
-            PUBLIC_URL=${{ secrets.PUBLIC_URL }}
-            AGENT_ENROLL_URL=${{ secrets.AGENT_ENROLL_URL }}
-            CLIENT_URL=${{ secrets.CLIENT_URL }}
-            PRODUCTION_URL=${{ secrets.PRODUCTION_URL }}
-            EOF
-            
-            echo "📝 Creating docker-compose.yml file..."
-            cat > docker-compose.yml << EOF
-            services:
-              app:
-                image: $APP_IMAGE
-                env_file:
-                  - .env
-                ports:
-                  - "5926:5926"
-                restart: unless-stopped
-                environment:
-                  - NODE_ENV=production
-                  - PORT=5926
-                depends_on:
-                  - db
-                healthcheck:
-                  test: ["CMD", "wget", "-qO-", "http://localhost:5926/api/health"]
-                  interval: 30s
-                  timeout: 10s
-                  retries: 3
-            
-              db:
-                image: postgres:15-alpine
-                environment:
-                  POSTGRES_USER: asset
-                  POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
-                  POSTGRES_DB: assetnext
-                ports:
-                  - "5928:5432"
-                volumes:
-                  - pgdata:/var/lib/postgresql/data
-                restart: unless-stopped
-            
-            volumes:
-              pgdata:
-                driver: local
-            EOF
-            
-            echo "🚀 Starting services with docker-compose..."
-            docker-compose up -d
-            
-            echo "⏳ Waiting for services to be healthy..."
-            sleep 30
-            
-            echo "🏥 Checking service health..."
-            if docker-compose ps | grep -q "Up.*healthy"; then
-              echo "✅ Deployment successful! Services are healthy."
-            else
-              echo "⚠️  Services started but health check status unclear. Check manually."
-              docker-compose ps
-            fi
-            
-            echo "📋 Final status:"
-            docker-compose ps
+            echo "🗄️ Creating volume for Postgres..."
+            docker volume create asset_pgdata || true
+            echo "🐘 Starting Postgres container..."
+            docker run -d \
+              --name $DB_CONTAINER \
+              --network $NETWORK_NAME \
+              -e POSTGRES_USER=asset \
+              -e POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e POSTGRES_DB=assetnext \
+              -p 5928:5432 \
+              -v asset_pgdata:/var/lib/postgresql/data \
+              --restart unless-stopped \
+              postgres:15-alpine
+            echo "⏳ Waiting 10s for DB to initialize..."
+            sleep 10
+            echo "🚀 Starting AssetNext app container..."
+            docker run -d \
+              --name $APP_CONTAINER \
+              --network $NETWORK_NAME \
+              -e NODE_ENV=production \
+              -e PORT=5926 \
+              -e HOST=0.0.0.0 \
+              -e SESSION_SECRET=${{ secrets.APP_SESSION_SECRET }} \
+              -e DATABASE_URL="postgresql://asset:${{ secrets.DB_PASSWORD }}@$DB_CONTAINER:5432/assetnext" \
+              -e POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e OA_BASE_URL=${{ secrets.OA_BASE_URL }} \
+              -e OA_USERNAME=${{ secrets.OA_USERNAME }} \
+              -e OA_PASSWORD=${{ secrets.OA_PASSWORD }} \
+              -e PUBLIC_URL=${{ secrets.PUBLIC_URL }} \
+              -e AGENT_ENROLL_URL=${{ secrets.AGENT_ENROLL_URL }} \
+              -p 5926:5926 \
+              --restart unless-stopped \
+              $APP_IMAGE
+            echo "✅ Deployment successful!"
