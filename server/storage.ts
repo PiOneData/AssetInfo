@@ -60,6 +60,29 @@ import {
   type InsertPolicyExecution,
   type PolicyTemplate,
   type InsertPolicyTemplate,
+  // Phase 6 types
+  type AccessRequest,
+  type InsertAccessRequest,
+  type JitAccessSession,
+  type InsertJitAccessSession,
+  type SodRule,
+  type InsertSodRule,
+  type SodViolation,
+  type InsertSodViolation,
+  type ReviewSuggestion,
+  type InsertReviewSuggestion,
+  type AnomalyDetection,
+  type InsertAnomalyDetection,
+  type PeerGroupBaseline,
+  type InsertPeerGroupBaseline,
+  type PeerGroupOutlier,
+  type InsertPeerGroupOutlier,
+  type CertificationSchedule,
+  type InsertCertificationSchedule,
+  type IntegrationConfig,
+  type InsertIntegrationConfig,
+  type IntegrationEvent,
+  type InsertIntegrationEvent,
   users,
   tenants,
   assets,
@@ -89,7 +112,41 @@ import {
   // Phase 4 tables
   automatedPolicies,
   policyExecutions,
-  policyTemplates
+  policyTemplates,
+  // Phase 5 tables
+  type AccessReviewCampaign,
+  type InsertAccessReviewCampaign,
+  type AccessReviewItem,
+  type InsertAccessReviewItem,
+  type AccessReviewDecision,
+  type InsertAccessReviewDecision,
+  type RoleTemplate,
+  type InsertRoleTemplate,
+  type UserRoleAssignment,
+  type InsertUserRoleAssignment,
+  type PrivilegeDriftAlert,
+  type InsertPrivilegeDriftAlert,
+  type OverprivilegedAccount,
+  type InsertOverprivilegedAccount,
+  accessReviewCampaigns,
+  accessReviewItems,
+  accessReviewDecisions,
+  roleTemplates,
+  userRoleAssignments,
+  privilegeDriftAlerts,
+  overprivilegedAccounts,
+  // Phase 6 tables
+  accessRequests,
+  jitAccessSessions,
+  sodRules,
+  sodViolations,
+  reviewSuggestions,
+  anomalyDetections,
+  peerGroupBaselines,
+  peerGroupOutliers,
+  certificationSchedules,
+  integrationConfigs,
+  integrationEvents
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword } from "./services/auth";
@@ -362,6 +419,97 @@ export interface IStorage {
   updateUserAppAccessType(userId: string, appId: string, tenantId: string, newAccessType: string): Promise<void>;
   getUsers(tenantId: string): Promise<User[]>;
   getTenants(): Promise<Tenant[]>;
+
+  // ============================================================================
+  // Phase 6: Advanced Features & AI Intelligence
+  // ============================================================================
+
+  // Access Requests (Phase 6.1)
+  getAccessRequests(tenantId: string, filters?: {status?: string; requesterId?: string; approverId?: string}): Promise<AccessRequest[]>;
+  getAccessRequest(id: string, tenantId: string): Promise<AccessRequest | undefined>;
+  getAccessRequestsPendingForApprover(approverId: string, tenantId: string): Promise<AccessRequest[]>;
+  getAccessRequestsByRequester(requesterId: string, tenantId: string): Promise<AccessRequest[]>;
+  createAccessRequest(request: InsertAccessRequest): Promise<AccessRequest>;
+  updateAccessRequest(id: string, tenantId: string, updates: Partial<InsertAccessRequest>): Promise<AccessRequest | undefined>;
+  deleteAccessRequest(id: string, tenantId: string): Promise<boolean>;
+
+  // JIT Access Sessions (Phase 6.2)
+  getJitAccessSessions(tenantId: string, filters?: {userId?: string; appId?: string; status?: string}): Promise<JitAccessSession[]>;
+  getJitAccessSession(id: string, tenantId: string): Promise<JitAccessSession | undefined>;
+  getActiveJitSessions(tenantId: string): Promise<JitAccessSession[]>;
+  getExpiredJitSessions(tenantId: string): Promise<JitAccessSession[]>;
+  createJitAccessSession(session: InsertJitAccessSession): Promise<JitAccessSession>;
+  updateJitAccessSession(id: string, tenantId: string, updates: Partial<InsertJitAccessSession>): Promise<JitAccessSession | undefined>;
+  deleteJitAccessSession(id: string, tenantId: string): Promise<boolean>;
+
+  // Segregation of Duties Rules (Phase 6.3)
+  getSodRules(tenantId: string, filters?: {isActive?: boolean; severity?: string}): Promise<SodRule[]>;
+  getSodRule(id: string, tenantId: string): Promise<SodRule | undefined>;
+  createSodRule(rule: InsertSodRule): Promise<SodRule>;
+  updateSodRule(id: string, tenantId: string, updates: Partial<InsertSodRule>): Promise<SodRule | undefined>;
+  deleteSodRule(id: string, tenantId: string): Promise<boolean>;
+  toggleSodRule(id: string, tenantId: string, isActive: boolean): Promise<SodRule | undefined>;
+
+  // SoD Violations (Phase 6.3)
+  getSodViolations(tenantId: string, filters?: {userId?: string; status?: string; severity?: string}): Promise<SodViolation[]>;
+  getSodViolation(id: string, tenantId: string): Promise<SodViolation | undefined>;
+  createSodViolation(violation: InsertSodViolation): Promise<SodViolation>;
+  updateSodViolation(id: string, tenantId: string, updates: Partial<InsertSodViolation>): Promise<SodViolation | undefined>;
+  deleteSodViolation(id: string, tenantId: string): Promise<boolean>;
+
+  // Review Suggestions (Phase 6.4)
+  getReviewSuggestions(campaignId: string): Promise<ReviewSuggestion[]>;
+  getReviewSuggestion(id: string): Promise<ReviewSuggestion | undefined>;
+  createReviewSuggestion(suggestion: InsertReviewSuggestion): Promise<ReviewSuggestion>;
+  updateReviewSuggestion(id: string, updates: Partial<InsertReviewSuggestion>): Promise<ReviewSuggestion | undefined>;
+
+  // Anomaly Detections (Phase 6.5)
+  getAnomalyDetections(tenantId: string, filters?: {userId?: string; status?: string; severity?: string}): Promise<AnomalyDetection[]>;
+  getAnomalyDetection(id: string, tenantId: string): Promise<AnomalyDetection | undefined>;
+  createAnomalyDetection(anomaly: InsertAnomalyDetection): Promise<AnomalyDetection>;
+  updateAnomalyDetection(id: string, tenantId: string, updates: Partial<InsertAnomalyDetection>): Promise<AnomalyDetection | undefined>;
+  deleteAnomalyDetection(id: string, tenantId: string): Promise<boolean>;
+
+  // Peer Group Baselines (Phase 6.6)
+  getPeerGroupBaselines(tenantId: string, filters?: {department?: string; role?: string}): Promise<PeerGroupBaseline[]>;
+  getPeerGroupBaseline(id: string, tenantId: string): Promise<PeerGroupBaseline | undefined>;
+  createPeerGroupBaseline(baseline: InsertPeerGroupBaseline): Promise<PeerGroupBaseline>;
+  updatePeerGroupBaseline(id: string, tenantId: string, updates: Partial<InsertPeerGroupBaseline>): Promise<PeerGroupBaseline | undefined>;
+  deletePeerGroupBaseline(id: string, tenantId: string): Promise<boolean>;
+
+  // Peer Group Outliers (Phase 6.6)
+  getPeerGroupOutliers(tenantId: string, filters?: {userId?: string; status?: string}): Promise<PeerGroupOutlier[]>;
+  getPeerGroupOutlier(id: string, tenantId: string): Promise<PeerGroupOutlier | undefined>;
+  createPeerGroupOutlier(outlier: InsertPeerGroupOutlier): Promise<PeerGroupOutlier>;
+  updatePeerGroupOutlier(id: string, tenantId: string, updates: Partial<InsertPeerGroupOutlier>): Promise<PeerGroupOutlier | undefined>;
+  deletePeerGroupOutlier(id: string, tenantId: string): Promise<boolean>;
+
+  // Certification Schedules (Phase 6.7)
+  getCertificationSchedules(tenantId: string, filters?: {userId?: string; appId?: string; status?: string}): Promise<CertificationSchedule[]>;
+  getCertificationSchedule(id: string, tenantId: string): Promise<CertificationSchedule | undefined>;
+  getUpcomingCertifications(tenantId: string, days: number): Promise<CertificationSchedule[]>;
+  createCertificationSchedule(schedule: InsertCertificationSchedule): Promise<CertificationSchedule>;
+  updateCertificationSchedule(id: string, tenantId: string, updates: Partial<InsertCertificationSchedule>): Promise<CertificationSchedule | undefined>;
+  deleteCertificationSchedule(id: string, tenantId: string): Promise<boolean>;
+
+  // Integration Configs (Phase 6.10)
+  getIntegrationConfigs(tenantId: string, filters?: {category?: string; enabled?: boolean}): Promise<IntegrationConfig[]>;
+  getIntegrationConfig(id: string, tenantId: string): Promise<IntegrationConfig | undefined>;
+  getIntegrationConfigByIntegrationId(integrationId: string, tenantId: string): Promise<IntegrationConfig | undefined>;
+  createIntegrationConfig(config: InsertIntegrationConfig): Promise<IntegrationConfig>;
+  updateIntegrationConfig(id: string, tenantId: string, updates: Partial<InsertIntegrationConfig>): Promise<IntegrationConfig | undefined>;
+  deleteIntegrationConfig(id: string, tenantId: string): Promise<boolean>;
+  toggleIntegrationConfig(id: string, tenantId: string, enabled: boolean): Promise<IntegrationConfig | undefined>;
+
+  // Integration Events (Phase 6.10)
+  getIntegrationEvents(tenantId: string, filters?: {integrationId?: string; eventType?: string; status?: string}): Promise<IntegrationEvent[]>;
+  getIntegrationEvent(id: string, tenantId: string): Promise<IntegrationEvent | undefined>;
+  createIntegrationEvent(event: InsertIntegrationEvent): Promise<IntegrationEvent>;
+  updateIntegrationEvent(id: string, tenantId: string, updates: Partial<InsertIntegrationEvent>): Promise<IntegrationEvent | undefined>;
+
+  // Helper methods for Phase 6
+  getUserAppAccessList(userId: string, tenantId: string): Promise<UserAppAccess[]>;
+  grantUserAppAccess(access: InsertUserAppAccess): Promise<UserAppAccess>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3281,6 +3429,549 @@ export class DatabaseStorage implements IStorage {
 
   async getTenants(): Promise<Tenant[]> {
     return db.select().from(tenants).orderBy(tenants.name);
+  }
+
+  // ============================================================================
+  // Phase 6: Advanced Features & AI Intelligence
+  // ============================================================================
+
+  // Access Requests (Phase 6.1)
+  async getAccessRequests(tenantId: string, filters?: {status?: string; requesterId?: string; approverId?: string}): Promise<AccessRequest[]> {
+    const conditions = [eq(accessRequests.tenantId, tenantId)];
+
+    if (filters?.status) {
+      conditions.push(eq(accessRequests.status, filters.status));
+    }
+    if (filters?.requesterId) {
+      conditions.push(eq(accessRequests.requesterId, filters.requesterId));
+    }
+    if (filters?.approverId) {
+      conditions.push(eq(accessRequests.approverId, filters.approverId));
+    }
+
+    return db.select().from(accessRequests)
+      .where(and(...conditions))
+      .orderBy(desc(accessRequests.createdAt));
+  }
+
+  async getAccessRequest(id: string, tenantId: string): Promise<AccessRequest | undefined> {
+    const [request] = await db.select().from(accessRequests)
+      .where(and(eq(accessRequests.id, id), eq(accessRequests.tenantId, tenantId)));
+    return request;
+  }
+
+  async getAccessRequestsPendingForApprover(approverId: string, tenantId: string): Promise<AccessRequest[]> {
+    return db.select().from(accessRequests)
+      .where(and(
+        eq(accessRequests.tenantId, tenantId),
+        eq(accessRequests.approverId, approverId),
+        eq(accessRequests.status, 'pending')
+      ))
+      .orderBy(desc(accessRequests.createdAt));
+  }
+
+  async getAccessRequestsByRequester(requesterId: string, tenantId: string): Promise<AccessRequest[]> {
+    return db.select().from(accessRequests)
+      .where(and(
+        eq(accessRequests.tenantId, tenantId),
+        eq(accessRequests.requesterId, requesterId)
+      ))
+      .orderBy(desc(accessRequests.createdAt));
+  }
+
+  async createAccessRequest(request: InsertAccessRequest): Promise<AccessRequest> {
+    const [created] = await db.insert(accessRequests).values(request).returning();
+    return created;
+  }
+
+  async updateAccessRequest(id: string, tenantId: string, updates: Partial<InsertAccessRequest>): Promise<AccessRequest | undefined> {
+    const [updated] = await db.update(accessRequests)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(accessRequests.id, id), eq(accessRequests.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteAccessRequest(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(accessRequests)
+      .where(and(eq(accessRequests.id, id), eq(accessRequests.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // JIT Access Sessions (Phase 6.2)
+  async getJitAccessSessions(tenantId: string, filters?: {userId?: string; appId?: string; status?: string}): Promise<JitAccessSession[]> {
+    const conditions = [eq(jitAccessSessions.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(jitAccessSessions.userId, filters.userId));
+    }
+    if (filters?.appId) {
+      conditions.push(eq(jitAccessSessions.appId, filters.appId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(jitAccessSessions.status, filters.status));
+    }
+
+    return db.select().from(jitAccessSessions)
+      .where(and(...conditions))
+      .orderBy(desc(jitAccessSessions.createdAt));
+  }
+
+  async getJitAccessSession(id: string, tenantId: string): Promise<JitAccessSession | undefined> {
+    const [session] = await db.select().from(jitAccessSessions)
+      .where(and(eq(jitAccessSessions.id, id), eq(jitAccessSessions.tenantId, tenantId)));
+    return session;
+  }
+
+  async getActiveJitSessions(tenantId: string): Promise<JitAccessSession[]> {
+    const now = new Date();
+    return db.select().from(jitAccessSessions)
+      .where(and(
+        eq(jitAccessSessions.tenantId, tenantId),
+        eq(jitAccessSessions.status, 'active'),
+        gt(jitAccessSessions.expiresAt, now)
+      ))
+      .orderBy(jitAccessSessions.expiresAt);
+  }
+
+  async getExpiredJitSessions(tenantId: string): Promise<JitAccessSession[]> {
+    const now = new Date();
+    return db.select().from(jitAccessSessions)
+      .where(and(
+        eq(jitAccessSessions.tenantId, tenantId),
+        eq(jitAccessSessions.status, 'active'),
+        sql`${jitAccessSessions.expiresAt} < ${now}`
+      ))
+      .orderBy(jitAccessSessions.expiresAt);
+  }
+
+  async createJitAccessSession(session: InsertJitAccessSession): Promise<JitAccessSession> {
+    const [created] = await db.insert(jitAccessSessions).values(session).returning();
+    return created;
+  }
+
+  async updateJitAccessSession(id: string, tenantId: string, updates: Partial<InsertJitAccessSession>): Promise<JitAccessSession | undefined> {
+    const [updated] = await db.update(jitAccessSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(jitAccessSessions.id, id), eq(jitAccessSessions.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteJitAccessSession(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(jitAccessSessions)
+      .where(and(eq(jitAccessSessions.id, id), eq(jitAccessSessions.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Segregation of Duties Rules (Phase 6.3)
+  async getSodRules(tenantId: string, filters?: {isActive?: boolean; severity?: string}): Promise<SodRule[]> {
+    const conditions = [eq(sodRules.tenantId, tenantId)];
+
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(sodRules.isActive, filters.isActive));
+    }
+    if (filters?.severity) {
+      conditions.push(eq(sodRules.severity, filters.severity));
+    }
+
+    return db.select().from(sodRules)
+      .where(and(...conditions))
+      .orderBy(desc(sodRules.severity), sodRules.name);
+  }
+
+  async getSodRule(id: string, tenantId: string): Promise<SodRule | undefined> {
+    const [rule] = await db.select().from(sodRules)
+      .where(and(eq(sodRules.id, id), eq(sodRules.tenantId, tenantId)));
+    return rule;
+  }
+
+  async createSodRule(rule: InsertSodRule): Promise<SodRule> {
+    const [created] = await db.insert(sodRules).values(rule).returning();
+    return created;
+  }
+
+  async updateSodRule(id: string, tenantId: string, updates: Partial<InsertSodRule>): Promise<SodRule | undefined> {
+    const [updated] = await db.update(sodRules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(sodRules.id, id), eq(sodRules.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSodRule(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(sodRules)
+      .where(and(eq(sodRules.id, id), eq(sodRules.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async toggleSodRule(id: string, tenantId: string, isActive: boolean): Promise<SodRule | undefined> {
+    const [updated] = await db.update(sodRules)
+      .set({ isActive, updatedAt: new Date() })
+      .where(and(eq(sodRules.id, id), eq(sodRules.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // SoD Violations (Phase 6.3)
+  async getSodViolations(tenantId: string, filters?: {userId?: string; status?: string; severity?: string}): Promise<SodViolation[]> {
+    const conditions = [eq(sodViolations.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(sodViolations.userId, filters.userId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(sodViolations.status, filters.status));
+    }
+    if (filters?.severity) {
+      conditions.push(eq(sodViolations.severity, filters.severity));
+    }
+
+    return db.select().from(sodViolations)
+      .where(and(...conditions))
+      .orderBy(desc(sodViolations.severity), desc(sodViolations.detectedAt));
+  }
+
+  async getSodViolation(id: string, tenantId: string): Promise<SodViolation | undefined> {
+    const [violation] = await db.select().from(sodViolations)
+      .where(and(eq(sodViolations.id, id), eq(sodViolations.tenantId, tenantId)));
+    return violation;
+  }
+
+  async createSodViolation(violation: InsertSodViolation): Promise<SodViolation> {
+    const [created] = await db.insert(sodViolations).values(violation).returning();
+    return created;
+  }
+
+  async updateSodViolation(id: string, tenantId: string, updates: Partial<InsertSodViolation>): Promise<SodViolation | undefined> {
+    const [updated] = await db.update(sodViolations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(sodViolations.id, id), eq(sodViolations.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSodViolation(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(sodViolations)
+      .where(and(eq(sodViolations.id, id), eq(sodViolations.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Review Suggestions (Phase 6.4)
+  async getReviewSuggestions(campaignId: string): Promise<ReviewSuggestion[]> {
+    return db.select().from(reviewSuggestions)
+      .where(eq(reviewSuggestions.campaignId, campaignId))
+      .orderBy(desc(reviewSuggestions.confidence));
+  }
+
+  async getReviewSuggestion(id: string): Promise<ReviewSuggestion | undefined> {
+    const [suggestion] = await db.select().from(reviewSuggestions)
+      .where(eq(reviewSuggestions.id, id));
+    return suggestion;
+  }
+
+  async createReviewSuggestion(suggestion: InsertReviewSuggestion): Promise<ReviewSuggestion> {
+    const [created] = await db.insert(reviewSuggestions).values(suggestion).returning();
+    return created;
+  }
+
+  async updateReviewSuggestion(id: string, updates: Partial<InsertReviewSuggestion>): Promise<ReviewSuggestion | undefined> {
+    const [updated] = await db.update(reviewSuggestions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(reviewSuggestions.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Anomaly Detections (Phase 6.5)
+  async getAnomalyDetections(tenantId: string, filters?: {userId?: string; status?: string; severity?: string}): Promise<AnomalyDetection[]> {
+    const conditions = [eq(anomalyDetections.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(anomalyDetections.userId, filters.userId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(anomalyDetections.status, filters.status));
+    }
+    if (filters?.severity) {
+      conditions.push(eq(anomalyDetections.severity, filters.severity));
+    }
+
+    return db.select().from(anomalyDetections)
+      .where(and(...conditions))
+      .orderBy(desc(anomalyDetections.severity), desc(anomalyDetections.detectedAt));
+  }
+
+  async getAnomalyDetection(id: string, tenantId: string): Promise<AnomalyDetection | undefined> {
+    const [anomaly] = await db.select().from(anomalyDetections)
+      .where(and(eq(anomalyDetections.id, id), eq(anomalyDetections.tenantId, tenantId)));
+    return anomaly;
+  }
+
+  async createAnomalyDetection(anomaly: InsertAnomalyDetection): Promise<AnomalyDetection> {
+    const [created] = await db.insert(anomalyDetections).values(anomaly).returning();
+    return created;
+  }
+
+  async updateAnomalyDetection(id: string, tenantId: string, updates: Partial<InsertAnomalyDetection>): Promise<AnomalyDetection | undefined> {
+    const [updated] = await db.update(anomalyDetections)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(anomalyDetections.id, id), eq(anomalyDetections.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteAnomalyDetection(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(anomalyDetections)
+      .where(and(eq(anomalyDetections.id, id), eq(anomalyDetections.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Peer Group Baselines (Phase 6.6)
+  async getPeerGroupBaselines(tenantId: string, filters?: {department?: string; role?: string}): Promise<PeerGroupBaseline[]> {
+    const conditions = [eq(peerGroupBaselines.tenantId, tenantId)];
+
+    if (filters?.department) {
+      conditions.push(eq(peerGroupBaselines.department, filters.department));
+    }
+    if (filters?.role) {
+      conditions.push(eq(peerGroupBaselines.role, filters.role));
+    }
+
+    return db.select().from(peerGroupBaselines)
+      .where(and(...conditions))
+      .orderBy(peerGroupBaselines.department, peerGroupBaselines.role);
+  }
+
+  async getPeerGroupBaseline(id: string, tenantId: string): Promise<PeerGroupBaseline | undefined> {
+    const [baseline] = await db.select().from(peerGroupBaselines)
+      .where(and(eq(peerGroupBaselines.id, id), eq(peerGroupBaselines.tenantId, tenantId)));
+    return baseline;
+  }
+
+  async createPeerGroupBaseline(baseline: InsertPeerGroupBaseline): Promise<PeerGroupBaseline> {
+    const [created] = await db.insert(peerGroupBaselines).values(baseline).returning();
+    return created;
+  }
+
+  async updatePeerGroupBaseline(id: string, tenantId: string, updates: Partial<InsertPeerGroupBaseline>): Promise<PeerGroupBaseline | undefined> {
+    const [updated] = await db.update(peerGroupBaselines)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(peerGroupBaselines.id, id), eq(peerGroupBaselines.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deletePeerGroupBaseline(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(peerGroupBaselines)
+      .where(and(eq(peerGroupBaselines.id, id), eq(peerGroupBaselines.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Peer Group Outliers (Phase 6.6)
+  async getPeerGroupOutliers(tenantId: string, filters?: {userId?: string; status?: string}): Promise<PeerGroupOutlier[]> {
+    const conditions = [eq(peerGroupOutliers.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(peerGroupOutliers.userId, filters.userId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(peerGroupOutliers.status, filters.status));
+    }
+
+    return db.select().from(peerGroupOutliers)
+      .where(and(...conditions))
+      .orderBy(desc(peerGroupOutliers.varianceScore), desc(peerGroupOutliers.detectedAt));
+  }
+
+  async getPeerGroupOutlier(id: string, tenantId: string): Promise<PeerGroupOutlier | undefined> {
+    const [outlier] = await db.select().from(peerGroupOutliers)
+      .where(and(eq(peerGroupOutliers.id, id), eq(peerGroupOutliers.tenantId, tenantId)));
+    return outlier;
+  }
+
+  async createPeerGroupOutlier(outlier: InsertPeerGroupOutlier): Promise<PeerGroupOutlier> {
+    const [created] = await db.insert(peerGroupOutliers).values(outlier).returning();
+    return created;
+  }
+
+  async updatePeerGroupOutlier(id: string, tenantId: string, updates: Partial<InsertPeerGroupOutlier>): Promise<PeerGroupOutlier | undefined> {
+    const [updated] = await db.update(peerGroupOutliers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(peerGroupOutliers.id, id), eq(peerGroupOutliers.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deletePeerGroupOutlier(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(peerGroupOutliers)
+      .where(and(eq(peerGroupOutliers.id, id), eq(peerGroupOutliers.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Certification Schedules (Phase 6.7)
+  async getCertificationSchedules(tenantId: string, filters?: {userId?: string; appId?: string; status?: string}): Promise<CertificationSchedule[]> {
+    const conditions = [eq(certificationSchedules.tenantId, tenantId)];
+
+    if (filters?.userId) {
+      conditions.push(eq(certificationSchedules.userId, filters.userId));
+    }
+    if (filters?.appId) {
+      conditions.push(eq(certificationSchedules.appId, filters.appId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(certificationSchedules.status, filters.status));
+    }
+
+    return db.select().from(certificationSchedules)
+      .where(and(...conditions))
+      .orderBy(certificationSchedules.nextCertificationDate);
+  }
+
+  async getCertificationSchedule(id: string, tenantId: string): Promise<CertificationSchedule | undefined> {
+    const [schedule] = await db.select().from(certificationSchedules)
+      .where(and(eq(certificationSchedules.id, id), eq(certificationSchedules.tenantId, tenantId)));
+    return schedule;
+  }
+
+  async getUpcomingCertifications(tenantId: string, days: number): Promise<CertificationSchedule[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+
+    return db.select().from(certificationSchedules)
+      .where(and(
+        eq(certificationSchedules.tenantId, tenantId),
+        eq(certificationSchedules.status, 'active'),
+        sql`${certificationSchedules.nextCertificationDate} <= ${futureDate}`
+      ))
+      .orderBy(certificationSchedules.nextCertificationDate);
+  }
+
+  async createCertificationSchedule(schedule: InsertCertificationSchedule): Promise<CertificationSchedule> {
+    const [created] = await db.insert(certificationSchedules).values(schedule).returning();
+    return created;
+  }
+
+  async updateCertificationSchedule(id: string, tenantId: string, updates: Partial<InsertCertificationSchedule>): Promise<CertificationSchedule | undefined> {
+    const [updated] = await db.update(certificationSchedules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(certificationSchedules.id, id), eq(certificationSchedules.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteCertificationSchedule(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(certificationSchedules)
+      .where(and(eq(certificationSchedules.id, id), eq(certificationSchedules.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Integration Configs (Phase 6.10)
+  async getIntegrationConfigs(tenantId: string, filters?: {category?: string; enabled?: boolean}): Promise<IntegrationConfig[]> {
+    const conditions = [eq(integrationConfigs.tenantId, tenantId)];
+
+    if (filters?.category) {
+      conditions.push(eq(integrationConfigs.category, filters.category));
+    }
+    if (filters?.enabled !== undefined) {
+      conditions.push(eq(integrationConfigs.enabled, filters.enabled));
+    }
+
+    return db.select().from(integrationConfigs)
+      .where(and(...conditions))
+      .orderBy(integrationConfigs.category, integrationConfigs.name);
+  }
+
+  async getIntegrationConfig(id: string, tenantId: string): Promise<IntegrationConfig | undefined> {
+    const [config] = await db.select().from(integrationConfigs)
+      .where(and(eq(integrationConfigs.id, id), eq(integrationConfigs.tenantId, tenantId)));
+    return config;
+  }
+
+  async getIntegrationConfigByIntegrationId(integrationId: string, tenantId: string): Promise<IntegrationConfig | undefined> {
+    const [config] = await db.select().from(integrationConfigs)
+      .where(and(eq(integrationConfigs.integrationId, integrationId), eq(integrationConfigs.tenantId, tenantId)));
+    return config;
+  }
+
+  async createIntegrationConfig(config: InsertIntegrationConfig): Promise<IntegrationConfig> {
+    const [created] = await db.insert(integrationConfigs).values(config).returning();
+    return created;
+  }
+
+  async updateIntegrationConfig(id: string, tenantId: string, updates: Partial<InsertIntegrationConfig>): Promise<IntegrationConfig | undefined> {
+    const [updated] = await db.update(integrationConfigs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(integrationConfigs.id, id), eq(integrationConfigs.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteIntegrationConfig(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(integrationConfigs)
+      .where(and(eq(integrationConfigs.id, id), eq(integrationConfigs.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async toggleIntegrationConfig(id: string, tenantId: string, enabled: boolean): Promise<IntegrationConfig | undefined> {
+    const [updated] = await db.update(integrationConfigs)
+      .set({ enabled, updatedAt: new Date() })
+      .where(and(eq(integrationConfigs.id, id), eq(integrationConfigs.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Integration Events (Phase 6.10)
+  async getIntegrationEvents(tenantId: string, filters?: {integrationId?: string; eventType?: string; status?: string}): Promise<IntegrationEvent[]> {
+    const conditions = [eq(integrationEvents.tenantId, tenantId)];
+
+    if (filters?.integrationId) {
+      conditions.push(eq(integrationEvents.integrationId, filters.integrationId));
+    }
+    if (filters?.eventType) {
+      conditions.push(eq(integrationEvents.eventType, filters.eventType));
+    }
+    if (filters?.status) {
+      conditions.push(eq(integrationEvents.status, filters.status));
+    }
+
+    return db.select().from(integrationEvents)
+      .where(and(...conditions))
+      .orderBy(desc(integrationEvents.createdAt));
+  }
+
+  async getIntegrationEvent(id: string, tenantId: string): Promise<IntegrationEvent | undefined> {
+    const [event] = await db.select().from(integrationEvents)
+      .where(and(eq(integrationEvents.id, id), eq(integrationEvents.tenantId, tenantId)));
+    return event;
+  }
+
+  async createIntegrationEvent(event: InsertIntegrationEvent): Promise<IntegrationEvent> {
+    const [created] = await db.insert(integrationEvents).values(event).returning();
+    return created;
+  }
+
+  async updateIntegrationEvent(id: string, tenantId: string, updates: Partial<InsertIntegrationEvent>): Promise<IntegrationEvent | undefined> {
+    const [updated] = await db.update(integrationEvents)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(integrationEvents.id, id), eq(integrationEvents.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  // Helper methods for Phase 6
+  async getUserAppAccessList(userId: string, tenantId: string): Promise<UserAppAccess[]> {
+    return db.select().from(userAppAccess)
+      .where(and(
+        eq(userAppAccess.userId, userId),
+        eq(userAppAccess.tenantId, tenantId)
+      ))
+      .orderBy(userAppAccess.grantedAt);
+  }
+
+  async grantUserAppAccess(access: InsertUserAppAccess): Promise<UserAppAccess> {
+    const [created] = await db.insert(userAppAccess).values(access).returning();
+    return created;
   }
 }
 

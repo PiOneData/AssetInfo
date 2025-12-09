@@ -38,6 +38,11 @@ import offboardingRoutes from "./offboarding.routes";
 import policyRoutes from "./policy.routes";
 // Phase 5: Identity Governance & Access Reviews
 import accessReviewsRoutes from "./access-reviews.routes";
+// Phase 6: Advanced Features & AI Intelligence
+import accessRequestsRoutes from "./access-requests.routes";
+import jitAccessRoutes from "./jit-access.routes";
+import sodRoutes from "./sod.routes";
+import anomaliesRoutes from "./anomalies.routes";
 // All routes have been migrated from routes.legacy.ts
 
 /**
@@ -92,7 +97,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 
   // ========================================
-  // SAAS GOVERNANCE ROUTES (Phase 0-5)
+  // SAAS GOVERNANCE ROUTES (Phase 0-6)
   // ========================================
   app.use("/api/saas-apps", saasAppsRoutes);           // 8 routes - SaaS app management
   app.use("/api/saas-contracts", saasContractsRoutes); // 7 routes - Contract management
@@ -103,6 +108,10 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/offboarding", offboardingRoutes);      // 12 routes - Offboarding automation (Phase 3)
   app.use("/api/policies", policyRoutes);              // 13 routes - Policy automation engine (Phase 4)
   app.use("/api/access-reviews", accessReviewsRoutes); // 22 routes - Identity governance (Phase 5)
+  app.use("/api/access-requests", accessRequestsRoutes); // 8 routes - Self-service access requests (Phase 6.1)
+  app.use("/api/jit-access", jitAccessRoutes);         // 11 routes - Just-in-time access (Phase 6.2)
+  app.use("/api/sod", sodRoutes);                      // 14 routes - Segregation of duties (Phase 6.3)
+  app.use("/api/anomalies", anomaliesRoutes);          // 8 routes - Anomaly detection (Phase 6.5)
 
   // SPECIAL ROUTES (Non-API)
   app.use("/enroll", enrollmentRoutes);         // 2 routes - Device enrollment pages
