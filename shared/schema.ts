@@ -1092,6 +1092,13 @@ export const userAppAccess = pgTable(
     loginCount: integer("login_count").default(0),
     lastLoginAt: timestamp("last_login_at"),
 
+    // Access review fields (added for access review campaigns)
+    accessType: text("access_type"),
+    businessJustification: text("business_justification"),
+    lastReviewedAt: timestamp("last_reviewed_at"),
+    lastReviewedBy: varchar("last_reviewed_by"),
+    nextReviewDate: timestamp("next_review_date"),
+
     // Metadata
     metadata: jsonb("metadata").$type<Record<string, any>>(),
     notes: text("notes"),

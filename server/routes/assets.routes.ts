@@ -824,14 +824,14 @@ router.post("/openaudit/sync", authenticateToken, async (req, res) => {
  *       200:
  *         description: Software list retrieved successfully
  */
-router.get("/:assetId/software", async (req, res) => {
+router.get("/:assetId/software", authenticateToken, async (req, res) => {
   try {
     const assetId = String(req.params.assetId);
 
     const [row] = await db
       .select()
       .from(s.assets)
-      .where(eq(s.assets.id, assetId))
+      .where(and(eq(s.assets.id, assetId), eq(s.assets.tenantId, req.user!.tenantId)))
       .limit(1);
 
     if (!row) {
@@ -876,19 +876,20 @@ router.get("/:assetId/software", async (req, res) => {
  *       200:
  *         description: Assets ingested successfully
  */
-router.post("/tni/bulk", async (req, res) => {
+router.post("/tni/bulk", authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const { assets } = req.body as { assets: any[] };
     if (!Array.isArray(assets) || assets.length === 0) {
       return res.status(400).json({ message: "assets[] required" });
     }
 
-    const tenantFromHeader = (req.header("x-tenant-id") || "").trim();
+    // Use authenticated user's tenant ID - ignore any header or body tenant ID
+    const tenantId = req.user!.tenantId;
     let count = 0;
 
     for (const a of assets) {
       const row = {
-        tenantId: tenantFromHeader || a.tenantId,
+        tenantId: tenantId,
         name: a.name ?? a.hostname ?? "Unknown",
         type: a.type ?? "Hardware",
         category: a.category ?? null,
@@ -900,10 +901,6 @@ router.post("/tni/bulk", async (req, res) => {
         notes: a.notes ?? "Imported from TNI",
         updatedAt: new Date(),
       };
-
-      if (!row.tenantId) {
-        return res.status(400).json({ message: "tenantId missing (x-tenant-id header or body)" });
-      }
 
       // Upsert logic
       if (row.serialNumber) {

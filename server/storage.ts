@@ -3241,7 +3241,7 @@ export class DatabaseStorage implements IStorage {
       appName: saasApps.name,
       appCategory: saasApps.category,
       accessType: userAppAccess.accessType,
-      grantedDate: userAppAccess.grantedAt,
+      grantedDate: userAppAccess.accessGrantedDate,
       lastAccessDate: userAppAccess.lastAccessDate,
       businessJustification: userAppAccess.businessJustification,
     })
