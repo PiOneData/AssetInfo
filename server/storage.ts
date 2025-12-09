@@ -2553,7 +2553,7 @@ export class DatabaseStorage implements IStorage {
     const denied = apps.filter(a => a.approvalStatus === 'denied').length;
     const highRisk = apps.filter(a => (a.riskScore || 0) >= 70).length;
 
-    return { total, approved, pending, denied, highRisk };
+    return { totalApps: total, approvedApps: approved, pendingApps: pending, highRiskApps: highRisk };
   }
 
   // SaaS Contracts
