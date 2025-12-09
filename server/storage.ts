@@ -3332,16 +3332,6 @@ export class DatabaseStorage implements IStorage {
     return newToken;
   }
 
-  async incrementEnrollmentTokenUsage(tokenString: string): Promise<void> {
-    await db.update(enrollmentTokens)
-      .set({
-        usedCount: sql`${enrollmentTokens.usedCount} + 1`,
-        lastUsedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(enrollmentTokens.token, tokenString));
-  }
-
   async validateEnrollmentToken(tokenString: string): Promise<EnrollmentToken | null> {
     const [token] = await db.select()
       .from(enrollmentTokens)
