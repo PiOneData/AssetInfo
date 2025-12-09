@@ -21,6 +21,7 @@ import geographicRoutes from "./geographic.routes";
 import webhookRoutes from "./webhook.routes";
 import agentRoutes from "./agent.routes";
 import enrollmentRoutes from "./enrollment.routes";
+import enrollmentTokensRoutes from "./enrollment-tokens.routes";
 import softwareRoutes from "./software.routes";
 import debugRoutes from "./debug.routes";
 // SaaS Governance routes (Phase 0)
@@ -88,6 +89,7 @@ export async function registerAllRoutes(app: Express): Promise<Server> {
   app.use("/api/geographic", geographicRoutes); // 4 routes - Geographic data
   app.use("/api/webhook", webhookRoutes);       // 1 route - Email to ticket webhook
   app.use("/api/agent", agentRoutes);           // 1 route - Agent enrollment
+  app.use("/api/enrollment-tokens", enrollmentTokensRoutes); // 2 routes - Enrollment tokens
   app.use("/api/software", softwareRoutes);     // 2 routes - Software management
   app.use("/api/debug", debugRoutes);           // 1 route - Debug endpoints
 

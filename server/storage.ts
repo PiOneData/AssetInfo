@@ -3282,6 +3282,85 @@ export class DatabaseStorage implements IStorage {
   async getTenants(): Promise<Tenant[]> {
     return db.select().from(tenants).orderBy(tenants.name);
   }
+
+  // Enrollment Tokens Methods
+  async getActiveEnrollmentToken(tenantId: string): Promise<EnrollmentToken | undefined> {
+    const now = new Date();
+    const [token] = await db.select()
+      .from(enrollmentTokens)
+      .where(and(
+        eq(enrollmentTokens.tenantId, tenantId),
+        eq(enrollmentTokens.isActive, true),
+        or(
+          sql`${enrollmentTokens.expiresAt} IS NULL`,
+          gt(enrollmentTokens.expiresAt, now)
+        )
+      ))
+      .orderBy(desc(enrollmentTokens.createdAt))
+      .limit(1);
+
+    return token;
+  }
+
+  async ensureDefaultEnrollmentToken(tenantId: string, createdBy?: string): Promise<EnrollmentToken> {
+    // Check if there's already an active token
+    const existingToken = await this.getActiveEnrollmentToken(tenantId);
+    if (existingToken) {
+      return existingToken;
+    }
+
+    // Generate a new token
+    const token = randomUUID();
+    const [newToken] = await db.insert(enrollmentTokens)
+      .values({
+        tenantId,
+        token,
+        name: 'Default Enrollment Token',
+        description: 'Auto-generated default enrollment token',
+        isActive: true,
+        expiresAt: null, // Never expires
+        maxUses: null, // Unlimited uses
+        usedCount: 0,
+        createdBy,
+      })
+      .returning();
+
+    return newToken;
+  }
+
+  async incrementEnrollmentTokenUsage(tokenString: string): Promise<void> {
+    await db.update(enrollmentTokens)
+      .set({
+        usedCount: sql`${enrollmentTokens.usedCount} + 1`,
+        lastUsedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(enrollmentTokens.token, tokenString));
+  }
+
+  async validateEnrollmentToken(tokenString: string): Promise<EnrollmentToken | null> {
+    const [token] = await db.select()
+      .from(enrollmentTokens)
+      .where(and(
+        eq(enrollmentTokens.token, tokenString),
+        eq(enrollmentTokens.isActive, true)
+      ))
+      .limit(1);
+
+    if (!token) return null;
+
+    // Check if expired
+    if (token.expiresAt && new Date() > token.expiresAt) {
+      return null;
+    }
+
+    // Check if max uses exceeded
+    if (token.maxUses !== null && token.usedCount >= token.maxUses) {
+      return null;
+    }
+
+    return token;
+  }
 }
 
 // Create and seed the database storage

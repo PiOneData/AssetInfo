@@ -1553,6 +1553,31 @@ export const hrIntegrations = pgTable(
   })
 );
 
+// Enrollment Tokens Table - For device enrollment
+export const enrollmentTokens = pgTable(
+  "enrollment_tokens",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    token: varchar("token").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true),
+    expiresAt: timestamp("expires_at"),
+    maxUses: integer("max_uses"),
+    usedCount: integer("used_count").default(0),
+    lastUsedAt: timestamp("last_used_at"),
+    createdBy: varchar("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_enrollment_tokens_tenant").on(table.tenantId),
+    idxToken: index("idx_enrollment_tokens_token").on(table.token),
+    idxActive: index("idx_enrollment_tokens_active").on(table.tenantId, table.isActive),
+  })
+);
+
 // Validation Schemas for Phase 3
 export const insertOffboardingPlaybookSchema = createInsertSchema(offboardingPlaybooks).omit({
   id: true,
