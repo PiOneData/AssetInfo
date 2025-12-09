@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, authenticatedRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { authenticatedRequest } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
 import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";

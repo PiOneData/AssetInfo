@@ -359,7 +359,6 @@ export interface IStorage {
 
   // Helper methods for Phase 5
   getAllUserAppAccess(tenantId: string): Promise<any[]>;
-  revokeUserAppAccess(userId: string, appId: string, tenantId: string): Promise<void>;
   updateUserAppAccessType(userId: string, appId: string, tenantId: string, newAccessType: string): Promise<void>;
   getUsers(tenantId: string): Promise<User[]>;
   getTenants(): Promise<Tenant[]>;
@@ -3259,20 +3258,6 @@ export class DatabaseStorage implements IStorage {
     .orderBy(users.name, saasApps.name);
 
     return userAccess;
-  }
-
-  async revokeUserAppAccess(userId: string, appId: string, tenantId: string): Promise<void> {
-    await db.update(userAppAccess)
-      .set({
-        status: 'revoked',
-        revokedAt: new Date(),
-        updatedAt: new Date()
-      })
-      .where(and(
-        eq(userAppAccess.userId, userId),
-        eq(userAppAccess.appId, appId),
-        eq(userAppAccess.tenantId, tenantId)
-      ));
   }
 
   async updateUserAppAccessType(userId: string, appId: string, tenantId: string, newAccessType: string): Promise<void> {

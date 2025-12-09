@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import { storage } from '../storage';
-import { requireRole } from '../middleware/auth';
+import { requireRole } from '../middleware/auth.middleware';
 import { AccessReviewCampaignEngine } from '../services/access-review/campaign-engine';
 import { PrivilegeDriftDetector } from '../services/access-review/privilege-drift';
 import { OverprivilegedAccountDetector } from '../services/access-review/overprivileged-detector';

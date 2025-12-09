@@ -10,14 +10,14 @@
 
 -- Offboarding Playbooks (templates)
 CREATE TABLE IF NOT EXISTS offboarding_playbooks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   type VARCHAR(100) NOT NULL, -- 'standard', 'contractor', 'transfer', 'role_change'
   description TEXT,
   is_default BOOLEAN DEFAULT false,
   steps JSONB NOT NULL, -- Array of step configurations
-  created_by UUID NOT NULL REFERENCES users(id),
+  created_by VARCHAR NOT NULL REFERENCES users(id),
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -27,12 +27,12 @@ CREATE INDEX idx_offboarding_playbooks_type ON offboarding_playbooks(type);
 
 -- Offboarding Requests (main workflow tracking)
 CREATE TABLE IF NOT EXISTS offboarding_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
-  playbook_id UUID REFERENCES offboarding_playbooks(id),
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id VARCHAR NOT NULL REFERENCES users(id),
+  playbook_id VARCHAR REFERENCES offboarding_playbooks(id),
   status VARCHAR(50) NOT NULL DEFAULT 'pending', -- 'pending', 'in_progress', 'completed', 'failed', 'partial', 'cancelled'
-  initiated_by UUID NOT NULL REFERENCES users(id),
+  initiated_by VARCHAR NOT NULL REFERENCES users(id),
   initiated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   started_at TIMESTAMP,
   completed_at TIMESTAMP,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS offboarding_requests (
   completed_tasks INTEGER DEFAULT 0,
   failed_tasks INTEGER DEFAULT 0,
   reason TEXT,
-  transfer_to_user_id UUID REFERENCES users(id), -- For ownership transfer
+  transfer_to_user_id VARCHAR REFERENCES users(id), -- For ownership transfer
   notes TEXT,
   audit_report_url TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -54,10 +54,10 @@ CREATE INDEX idx_offboarding_requests_initiated_at ON offboarding_requests(initi
 
 -- Offboarding Tasks (individual actions within a request)
 CREATE TABLE IF NOT EXISTS offboarding_tasks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_id UUID NOT NULL REFERENCES offboarding_requests(id) ON DELETE CASCADE,
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id VARCHAR NOT NULL REFERENCES offboarding_requests(id) ON DELETE CASCADE,
   task_type VARCHAR(100) NOT NULL, -- 'revoke_sso', 'revoke_oauth', 'transfer_ownership', 'remove_from_group', etc.
-  app_id UUID REFERENCES saas_apps(id),
+  app_id VARCHAR REFERENCES saas_apps(id),
   app_name VARCHAR(255),
   status VARCHAR(50) NOT NULL DEFAULT 'pending', -- 'pending', 'in_progress', 'completed', 'failed', 'skipped'
   priority INTEGER DEFAULT 0,
@@ -76,8 +76,8 @@ CREATE INDEX idx_offboarding_tasks_type ON offboarding_tasks(task_type);
 
 -- HR System Integrations
 CREATE TABLE IF NOT EXISTS hr_integrations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   provider VARCHAR(100) NOT NULL, -- 'bamboohr', 'keka', 'darwinbox'
   name VARCHAR(255) NOT NULL,
   config JSONB NOT NULL, -- API credentials, subdomain, etc.
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS hr_integrations (
   status VARCHAR(50) NOT NULL DEFAULT 'active', -- 'active', 'inactive', 'error'
   sync_enabled BOOLEAN DEFAULT true,
   auto_trigger_offboarding BOOLEAN DEFAULT true,
-  default_playbook_id UUID REFERENCES offboarding_playbooks(id),
+  default_playbook_id VARCHAR REFERENCES offboarding_playbooks(id),
   last_sync_at TIMESTAMP,
   sync_error TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

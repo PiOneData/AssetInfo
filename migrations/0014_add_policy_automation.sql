@@ -10,8 +10,8 @@
 
 -- Automated Policies (IF-THEN rules)
 CREATE TABLE IF NOT EXISTS automated_policies (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   enabled BOOLEAN DEFAULT true,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS automated_policies (
   last_executed_at TIMESTAMP,
 
   -- Metadata
-  created_by UUID NOT NULL REFERENCES users(id),
+  created_by VARCHAR NOT NULL REFERENCES users(id),
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -50,9 +50,9 @@ CREATE INDEX idx_automated_policies_tenant_enabled ON automated_policies(tenant_
 
 -- Policy Executions (audit log)
 CREATE TABLE IF NOT EXISTS policy_executions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  policy_id UUID NOT NULL REFERENCES automated_policies(id) ON DELETE CASCADE,
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  policy_id VARCHAR NOT NULL REFERENCES automated_policies(id) ON DELETE CASCADE,
 
   -- Trigger context
   trigger_event VARCHAR(100) NOT NULL,
@@ -82,7 +82,7 @@ CREATE INDEX idx_policy_executions_created ON policy_executions(created_at DESC)
 
 -- Policy Templates (pre-built templates)
 CREATE TABLE IF NOT EXISTS policy_templates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   category VARCHAR(100) NOT NULL, -- 'security', 'cost_optimization', 'compliance', etc.
   description TEXT NOT NULL,
@@ -105,16 +105,16 @@ CREATE INDEX idx_policy_templates_popularity ON policy_templates(popularity DESC
 
 -- Policy Approvals (for policies requiring approval)
 CREATE TABLE IF NOT EXISTS policy_approvals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  execution_id UUID NOT NULL REFERENCES policy_executions(id) ON DELETE CASCADE,
-  policy_id UUID NOT NULL REFERENCES automated_policies(id) ON DELETE CASCADE,
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id VARCHAR NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  execution_id VARCHAR NOT NULL REFERENCES policy_executions(id) ON DELETE CASCADE,
+  policy_id VARCHAR NOT NULL REFERENCES automated_policies(id) ON DELETE CASCADE,
 
   status VARCHAR(50) NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
   requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  requested_by UUID REFERENCES users(id),
+  requested_by VARCHAR REFERENCES users(id),
 
-  approved_by UUID REFERENCES users(id),
+  approved_by VARCHAR REFERENCES users(id),
   approved_at TIMESTAMP,
   approval_notes TEXT,
 

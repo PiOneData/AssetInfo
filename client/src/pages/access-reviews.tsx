@@ -12,7 +12,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, authenticatedRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { authenticatedRequest } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
 import { FloatingAIAssistant } from "@/components/ai/floating-ai-assistant";
@@ -124,34 +125,31 @@ export default function AccessReviewsPage() {
   // Fetch campaigns
   const { data: campaigns = [], isLoading: campaignsLoading } = useQuery<AccessReviewCampaign[]>({
     queryKey: ["access-review-campaigns"],
-    queryFn: () => authenticatedRequest("/api/access-reviews/campaigns"),
+    queryFn: () => authenticatedRequest("GET", "/api/access-reviews/campaigns"),
   });
 
   // Fetch my reviews
   const { data: myReviews = [] } = useQuery<MyReview[]>({
     queryKey: ["my-reviews"],
-    queryFn: () => authenticatedRequest("/api/access-reviews/my-reviews"),
+    queryFn: () => authenticatedRequest("GET", "/api/access-reviews/my-reviews"),
   });
 
   // Fetch privilege drift alerts
   const { data: driftAlerts = [] } = useQuery<PrivilegeDriftAlert[]>({
     queryKey: ["privilege-drift"],
-    queryFn: () => authenticatedRequest("/api/privilege-drift"),
+    queryFn: () => authenticatedRequest("GET", "/api/privilege-drift"),
   });
 
   // Fetch overprivileged accounts
   const { data: overprivilegedAccounts = [] } = useQuery<OverprivilegedAccount[]>({
     queryKey: ["overprivileged-accounts"],
-    queryFn: () => authenticatedRequest("/api/overprivileged-accounts"),
+    queryFn: () => authenticatedRequest("GET", "/api/overprivileged-accounts"),
   });
 
   // Create campaign mutation
   const createCampaignMutation = useMutation({
     mutationFn: (data: any) =>
-      authenticatedRequest("/api/access-reviews/campaigns", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+      authenticatedRequest("POST", "/api/access-reviews/campaigns", data),
     onSuccess: (response: any) => {
       toast({
         title: "Campaign created",
@@ -175,9 +173,7 @@ export default function AccessReviewsPage() {
   // Generate items mutation
   const generateItemsMutation = useMutation({
     mutationFn: (campaignId: string) =>
-      authenticatedRequest(`/api/access-reviews/campaigns/${campaignId}/generate-items`, {
-        method: "POST",
-      }),
+      authenticatedRequest("POST", `/api/access-reviews/campaigns/${campaignId}/generate-items`),
     onSuccess: () => {
       toast({
         title: "Review items generated",
@@ -190,9 +186,7 @@ export default function AccessReviewsPage() {
   // Run drift scan mutation
   const runDriftScanMutation = useMutation({
     mutationFn: () =>
-      authenticatedRequest("/api/privilege-drift/scan", {
-        method: "POST",
-      }),
+      authenticatedRequest("POST", "/api/privilege-drift/scan"),
     onSuccess: () => {
       toast({
         title: "Drift scan completed",
@@ -205,9 +199,7 @@ export default function AccessReviewsPage() {
   // Run overprivileged scan mutation
   const runOverprivilegedScanMutation = useMutation({
     mutationFn: () =>
-      authenticatedRequest("/api/overprivileged-accounts/scan", {
-        method: "POST",
-      }),
+      authenticatedRequest("POST", "/api/overprivileged-accounts/scan"),
     onSuccess: () => {
       toast({
         title: "Overprivileged scan completed",

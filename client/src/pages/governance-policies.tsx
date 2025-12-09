@@ -231,9 +231,9 @@ function PolicyForm({
               <FormDescription>
                 JSON object defining when this policy triggers. Examples:
                 <br />
-                <code className="text-xs">{"riskScore": {"$gte": 70}}</code> - Apps with risk score ≥ 70
+                <code className="text-xs">{`{"riskScore": {"$gte": 70}}`}</code> - Apps with risk score ≥ 70
                 <br />
-                <code className="text-xs">{"approvalStatus": "pending"}</code> - Pending apps
+                <code className="text-xs">{`{"approvalStatus": "pending"}`}</code> - Pending apps
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -257,9 +257,9 @@ function PolicyForm({
               <FormDescription>
                 JSON object defining what happens when policy triggers. Examples:
                 <br />
-                <code className="text-xs">{"action": "notify", "recipients": ["admin"]}</code>
+                <code className="text-xs">{`{"action": "notify", "recipients": ["admin"]}`}</code>
                 <br />
-                <code className="text-xs">{"action": "block", "message": "High risk"}</code>
+                <code className="text-xs">{`{"action": "block", "message": "High risk"}`}</code>
               </FormDescription>
               <FormMessage />
             </FormItem>
