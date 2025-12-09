@@ -1,0 +1,89 @@
+name: Deploy AssetNext (App + DB)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧩 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔑 Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
+
+      - name: 🏗️ Build and push app image
+        run: |
+          USERNAME=$(echo "${{ secrets.GHCR_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME=ghcr.io/$USERNAME/assetnext:latest
+          echo "📦 Building image: $IMAGE_NAME"
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+
+      - name: 🚀 Deploy to remote server using docker-compose
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            USERNAME=$(echo "${{ secrets.GHCR_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+            APP_IMAGE=ghcr.io/$USERNAME/assetnext:latest
+            
+            echo "🧹 Stopping existing containers..."
+            docker-compose down || true
+            
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f || true
+            
+            echo "📦 Pulling latest app image..."
+            docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }}
+            docker pull $APP_IMAGE
+            
+            echo "📝 Creating .env file..."
+            cat > .env << 'EOF'
+            NODE_ENV=production
+            PORT=5926
+            HOST=0.0.0.0
+            SESSION_SECRET=${{ secrets.SESSION_SECRET }}
+            DATABASE_URL=postgresql://asset:${{ secrets.DB_PASSWORD }}@db:5432/assetnext
+            POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+            OA_BASE_URL=${{ secrets.OA_BASE_URL }}
+            OA_USERNAME=${{ secrets.OA_USERNAME }}
+            OA_PASSWORD=${{ secrets.OA_PASSWORD }}
+            PUBLIC_URL=${{ secrets.PUBLIC_URL }}
+            AGENT_ENROLL_URL=${{ secrets.AGENT_ENROLL_URL }}
+            CLIENT_URL=${{ secrets.CLIENT_URL }}
+            PRODUCTION_URL=${{ secrets.PRODUCTION_URL }}
+            EOF
+            
+            echo "📝 Creating docker-compose.override.yml for custom image..."
+            cat > docker-compose.override.yml << EOF
+            services:
+              app:
+                image: $APP_IMAGE
+            EOF
+            
+            echo "🚀 Starting services with docker-compose..."
+            docker-compose up -d
+            
+            echo "⏳ Waiting for services to be healthy..."
+            sleep 30
+            
+            echo "🏥 Checking service health..."
+            if docker-compose ps | grep -q "Up.*healthy"; then
+              echo "✅ Deployment successful! Services are healthy."
+            else
+              echo "⚠️  Services started but health check status unclear. Check manually."
+              docker-compose ps
+            fi
+            
+            echo "📋 Final status:"
+            docker-compose ps
