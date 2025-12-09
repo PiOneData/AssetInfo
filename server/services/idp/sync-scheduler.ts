@@ -9,6 +9,7 @@ import cron from 'node-cron';
 import { storage } from '../../storage';
 import { AzureADConnector } from './azuread-connector';
 import { GoogleWorkspaceConnector } from './google-connector';
+import { OktaConnector } from './okta-connector';
 import { ShadowITDetector } from '../shadowit-detector';
 import { decrypt } from '../encryption';
 import type { IdPConnector } from './connector.interface';
@@ -137,7 +138,7 @@ export class IdPSyncScheduler {
         return new GoogleWorkspaceConnector(config, tenantId, provider.id);
 
       case 'okta':
-        throw new Error('Okta connector not implemented yet (Phase 2)');
+        return new OktaConnector(config, tenantId, provider.id);
 
       default:
         throw new Error(`Unsupported provider type: ${provider.type}`);

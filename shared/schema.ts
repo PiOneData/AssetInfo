@@ -1092,6 +1092,13 @@ export const userAppAccess = pgTable(
     loginCount: integer("login_count").default(0),
     lastLoginAt: timestamp("last_login_at"),
 
+    // Access review fields (added for access review campaigns)
+    accessType: text("access_type"),
+    businessJustification: text("business_justification"),
+    lastReviewedAt: timestamp("last_reviewed_at"),
+    lastReviewedBy: varchar("last_reviewed_by"),
+    nextReviewDate: timestamp("next_review_date"),
+
     // Metadata
     metadata: jsonb("metadata").$type<Record<string, any>>(),
     notes: text("notes"),
@@ -1543,6 +1550,107 @@ export const hrIntegrations = pgTable(
   (table) => ({
     idxTenant: index("idx_hr_integrations_tenant").on(table.tenantId),
     idxProvider: index("idx_hr_integrations_provider").on(table.provider),
+  })
+);
+
+// Enrollment Tokens Table - For device enrollment
+export const enrollmentTokens = pgTable(
+  "enrollment_tokens",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    token: varchar("token").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true),
+    expiresAt: timestamp("expires_at"),
+    maxUses: integer("max_uses"),
+    usedCount: integer("used_count").default(0),
+    lastUsedAt: timestamp("last_used_at"),
+    createdBy: varchar("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_enrollment_tokens_tenant").on(table.tenantId),
+    idxToken: index("idx_enrollment_tokens_token").on(table.token),
+    idxActive: index("idx_enrollment_tokens_active").on(table.tenantId, table.isActive),
+  })
+);
+
+// Network Monitoring Tables - WiFi device tracking and alerts
+export const wifiDevices = pgTable(
+  "wifi_devices",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: varchar("tenant_id").notNull(),
+    macAddress: varchar("mac_address").notNull(),
+    ipAddress: varchar("ip_address").notNull(),
+    hostname: text("hostname"),
+    manufacturer: text("manufacturer"),
+    assetId: varchar("asset_id"),
+    assetName: text("asset_name"),
+    isAuthorized: boolean("is_authorized").default(false),
+    firstSeen: timestamp("first_seen").defaultNow(),
+    lastSeen: timestamp("last_seen").defaultNow(),
+    isActive: boolean("is_active").default(true),
+    connectionDuration: integer("connection_duration").default(0),
+    deviceType: text("device_type"),
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_wifi_devices_tenant").on(table.tenantId),
+    idxMac: index("idx_wifi_devices_mac").on(table.macAddress),
+    idxActive: index("idx_wifi_devices_active").on(table.tenantId, table.isActive),
+    uniqueTenantMac: uniqueIndex("uniq_wifi_devices_tenant_mac").on(table.tenantId, table.macAddress),
+  })
+);
+
+export const networkAlerts = pgTable(
+  "network_alerts",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: varchar("tenant_id").notNull(),
+    macAddress: varchar("mac_address").notNull(),
+    ipAddress: varchar("ip_address").notNull(),
+    hostname: text("hostname"),
+    manufacturer: text("manufacturer"),
+    detectedAt: timestamp("detected_at").defaultNow(),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    acknowledgedBy: varchar("acknowledged_by"),
+    status: text("status").notNull().default("new"), // 'new', 'acknowledged', 'resolved'
+    notes: text("notes"),
+    deviceInfo: jsonb("device_info").$type<Record<string, any>>(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_network_alerts_tenant").on(table.tenantId),
+    idxStatus: index("idx_network_alerts_status").on(table.tenantId, table.status),
+    idxDetected: index("idx_network_alerts_detected").on(table.detectedAt),
+  })
+);
+
+// API Keys for Network Agents
+export const networkAgentKeys = pgTable(
+  "network_agent_keys",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull(),
+    apiKey: varchar("api_key").notNull().unique(),
+    agentName: text("agent_name").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true),
+    lastUsedAt: timestamp("last_used_at"),
+    createdBy: varchar("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    idxTenant: index("idx_network_agent_keys_tenant").on(table.tenantId),
+    idxApiKey: index("idx_network_agent_keys_api_key").on(table.apiKey),
   })
 );
 

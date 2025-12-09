@@ -101,6 +101,10 @@ import {
   ticketActivities,
   enrollmentTokens,
   enrollmentSessions,
+  // Network Monitoring tables
+  wifiDevices,
+  networkAlerts,
+  networkAgentKeys,
   // SaaS Governance tables (Phase 0)
   saasApps,
   saasContracts,
@@ -2701,7 +2705,7 @@ export class DatabaseStorage implements IStorage {
     const denied = apps.filter(a => a.approvalStatus === 'denied').length;
     const highRisk = apps.filter(a => (a.riskScore || 0) >= 70).length;
 
-    return { total, approved, pending, denied, highRisk };
+    return { totalApps: total, approvedApps: approved, pendingApps: pending, highRiskApps: highRisk };
   }
 
   // SaaS Contracts
@@ -3389,7 +3393,7 @@ export class DatabaseStorage implements IStorage {
       appName: saasApps.name,
       appCategory: saasApps.category,
       accessType: userAppAccess.accessType,
-      grantedDate: userAppAccess.grantedAt,
+      grantedDate: userAppAccess.accessGrantedDate,
       lastAccessDate: userAppAccess.lastAccessDate,
       businessJustification: userAppAccess.businessJustification,
     })
@@ -3972,6 +3976,227 @@ export class DatabaseStorage implements IStorage {
   async grantUserAppAccess(access: InsertUserAppAccess): Promise<UserAppAccess> {
     const [created] = await db.insert(userAppAccess).values(access).returning();
     return created;
+  }
+
+  // Enrollment Tokens Methods
+  async getActiveEnrollmentToken(tenantId: string): Promise<EnrollmentToken | undefined> {
+    const now = new Date();
+    const [token] = await db.select()
+      .from(enrollmentTokens)
+      .where(and(
+        eq(enrollmentTokens.tenantId, tenantId),
+        eq(enrollmentTokens.isActive, true),
+        or(
+          sql`${enrollmentTokens.expiresAt} IS NULL`,
+          gt(enrollmentTokens.expiresAt, now)
+        )
+      ))
+      .orderBy(desc(enrollmentTokens.createdAt))
+      .limit(1);
+
+    return token;
+  }
+
+  async ensureDefaultEnrollmentToken(tenantId: string, createdBy?: string): Promise<EnrollmentToken> {
+    // Check if there's already an active token
+    const existingToken = await this.getActiveEnrollmentToken(tenantId);
+    if (existingToken) {
+      return existingToken;
+    }
+
+    // Generate a new token
+    const token = randomUUID();
+    const [newToken] = await db.insert(enrollmentTokens)
+      .values({
+        tenantId,
+        token,
+        name: 'Default Enrollment Token',
+        description: 'Auto-generated default enrollment token',
+        isActive: true,
+        expiresAt: null, // Never expires
+        maxUses: null, // Unlimited uses
+        usedCount: 0,
+        createdBy,
+      })
+      .returning();
+
+    return newToken;
+  }
+
+  async incrementEnrollmentTokenUsage(tokenString: string): Promise<void> {
+    await db.update(enrollmentTokens)
+      .set({
+        usedCount: sql`${enrollmentTokens.usedCount} + 1`,
+        lastUsedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(enrollmentTokens.token, tokenString));
+  }
+
+  async validateEnrollmentToken(tokenString: string): Promise<EnrollmentToken | null> {
+    const [token] = await db.select()
+      .from(enrollmentTokens)
+      .where(and(
+        eq(enrollmentTokens.token, tokenString),
+        eq(enrollmentTokens.isActive, true)
+      ))
+      .limit(1);
+
+    if (!token) return null;
+
+    // Check if expired
+    if (token.expiresAt && new Date() > token.expiresAt) {
+      return null;
+    }
+
+    // Check if max uses exceeded
+    if (token.maxUses !== null && token.usedCount >= token.maxUses) {
+      return null;
+    }
+
+    return token;
+  }
+
+  // Network Monitoring Methods
+  async getActiveWifiDevices(tenantId: string): Promise<any[]> {
+    return db.select()
+      .from(wifiDevices)
+      .where(and(
+        eq(wifiDevices.tenantId, tenantId),
+        eq(wifiDevices.isActive, true)
+      ))
+      .orderBy(desc(wifiDevices.lastSeen));
+  }
+
+  async upsertWifiDevice(deviceData: any): Promise<any> {
+    const { tenantId, macAddress } = deviceData;
+
+    // Try to find existing device
+    const [existing] = await db.select()
+      .from(wifiDevices)
+      .where(and(
+        eq(wifiDevices.tenantId, tenantId),
+        eq(wifiDevices.macAddress, macAddress)
+      ))
+      .limit(1);
+
+    if (existing) {
+      // Update existing device
+      const [updated] = await db.update(wifiDevices)
+        .set({
+          ipAddress: deviceData.ipAddress,
+          hostname: deviceData.hostname || existing.hostname,
+          manufacturer: deviceData.manufacturer || existing.manufacturer,
+          lastSeen: new Date(),
+          isActive: true,
+          connectionDuration: sql`${wifiDevices.connectionDuration} + ${deviceData.connectionDuration || 0}`,
+          metadata: deviceData.metadata || existing.metadata,
+          updatedAt: new Date(),
+        })
+        .where(eq(wifiDevices.id, existing.id))
+        .returning();
+
+      return updated;
+    } else {
+      // Insert new device
+      const [inserted] = await db.insert(wifiDevices)
+        .values({
+          ...deviceData,
+          firstSeen: new Date(),
+          lastSeen: new Date(),
+          isActive: true,
+        })
+        .returning();
+
+      // Create alert for new unauthorized device
+      if (!deviceData.isAuthorized) {
+        await this.createNetworkAlert({
+          tenantId,
+          macAddress: deviceData.macAddress,
+          ipAddress: deviceData.ipAddress,
+          hostname: deviceData.hostname,
+          manufacturer: deviceData.manufacturer,
+          deviceInfo: deviceData.metadata || {},
+        });
+      }
+
+      return inserted;
+    }
+  }
+
+  async getNetworkAlerts(tenantId: string, status?: string): Promise<any[]> {
+    const conditions = [eq(networkAlerts.tenantId, tenantId)];
+    if (status) {
+      conditions.push(eq(networkAlerts.status, status));
+    }
+
+    return db.select()
+      .from(networkAlerts)
+      .where(and(...conditions))
+      .orderBy(desc(networkAlerts.detectedAt));
+  }
+
+  async createNetworkAlert(alertData: any): Promise<any> {
+    const [alert] = await db.insert(networkAlerts)
+      .values({
+        ...alertData,
+        status: 'new',
+        detectedAt: new Date(),
+      })
+      .returning();
+
+    return alert;
+  }
+
+  async acknowledgeNetworkAlert(alertId: number, userId: string, notes?: string): Promise<any> {
+    const [alert] = await db.update(networkAlerts)
+      .set({
+        status: 'acknowledged',
+        acknowledgedAt: new Date(),
+        acknowledgedBy: userId,
+        notes: notes || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(networkAlerts.id, alertId))
+      .returning();
+
+    return alert;
+  }
+
+  async generateNetworkAgentKey(tenantId: string, agentName: string, createdBy?: string): Promise<any> {
+    const apiKey = randomUUID();
+
+    const [key] = await db.insert(networkAgentKeys)
+      .values({
+        tenantId,
+        apiKey,
+        agentName,
+        description: `API key for ${agentName}`,
+        isActive: true,
+        createdBy,
+      })
+      .returning();
+
+    return key;
+  }
+
+  async validateNetworkAgentKey(apiKey: string): Promise<any> {
+    const [key] = await db.select()
+      .from(networkAgentKeys)
+      .where(and(
+        eq(networkAgentKeys.apiKey, apiKey),
+        eq(networkAgentKeys.isActive, true)
+      ))
+      .limit(1);
+
+    if (key) {
+      // Update last used timestamp
+      await db.update(networkAgentKeys)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(networkAgentKeys.id, key.id));
+    }
+
+    return key;
   }
 }
 

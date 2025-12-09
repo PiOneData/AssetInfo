@@ -824,14 +824,14 @@ router.post("/openaudit/sync", authenticateToken, async (req, res) => {
  *       200:
  *         description: Software list retrieved successfully
  */
-router.get("/:assetId/software", async (req, res) => {
+router.get("/:assetId/software", authenticateToken, async (req, res) => {
   try {
     const assetId = String(req.params.assetId);
 
     const [row] = await db
       .select()
       .from(s.assets)
-      .where(eq(s.assets.id, assetId))
+      .where(and(eq(s.assets.id, assetId), eq(s.assets.tenantId, req.user!.tenantId)))
       .limit(1);
 
     if (!row) {
@@ -876,19 +876,20 @@ router.get("/:assetId/software", async (req, res) => {
  *       200:
  *         description: Assets ingested successfully
  */
-router.post("/tni/bulk", async (req, res) => {
+router.post("/tni/bulk", authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const { assets } = req.body as { assets: any[] };
     if (!Array.isArray(assets) || assets.length === 0) {
       return res.status(400).json({ message: "assets[] required" });
     }
 
-    const tenantFromHeader = (req.header("x-tenant-id") || "").trim();
+    // Use authenticated user's tenant ID - ignore any header or body tenant ID
+    const tenantId = req.user!.tenantId;
     let count = 0;
 
     for (const a of assets) {
       const row = {
-        tenantId: tenantFromHeader || a.tenantId,
+        tenantId: tenantId,
         name: a.name ?? a.hostname ?? "Unknown",
         type: a.type ?? "Hardware",
         category: a.category ?? null,
@@ -900,10 +901,6 @@ router.post("/tni/bulk", async (req, res) => {
         notes: a.notes ?? "Imported from TNI",
         updatedAt: new Date(),
       };
-
-      if (!row.tenantId) {
-        return res.status(400).json({ message: "tenantId missing (x-tenant-id header or body)" });
-      }
 
       // Upsert logic
       if (row.serialNumber) {
@@ -959,6 +956,254 @@ router.post("/tni/bulk", async (req, res) => {
   } catch (err: any) {
     console.error("TNI bulk ingest error:", err?.message || err);
     return res.status(500).json({ message: "failed to ingest assets", error: err?.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/assets/location/{locationId}:
+ *   get:
+ *     summary: Get asset summary for a location
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: locationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Asset counts by category for the location
+ */
+router.get("/location/:locationId", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const locationId = req.params.locationId;
+    const tenantId = req.user!.tenantId;
+
+    // Get all assets for tenant with the specified location
+    const assets = await db.select()
+      .from(s.assets)
+      .where(and(
+        eq(s.assets.tenantId, tenantId),
+        eq(s.assets.location, locationId)
+      ));
+
+    // Count by category
+    const counts: Record<string, number> = {};
+    assets.forEach(asset => {
+      const category = asset.category || 'Uncategorized';
+      counts[category] = (counts[category] || 0) + 1;
+    });
+
+    return res.json(counts);
+  } catch (error: any) {
+    console.error("Error fetching location summary:", error);
+    return res.status(500).json({
+      message: "Failed to fetch location summary",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/assets/location/{locationId}/all:
+ *   get:
+ *     summary: Get all assets for a location
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: locationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of all assets in the location
+ */
+router.get("/location/:locationId/all", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const locationId = req.params.locationId;
+    const tenantId = req.user!.tenantId;
+
+    // Get all assets for tenant with the specified location
+    const assets = await db.select()
+      .from(s.assets)
+      .where(and(
+        eq(s.assets.tenantId, tenantId),
+        eq(s.assets.location, locationId)
+      ));
+
+    return res.json({ assets });
+  } catch (error: any) {
+    console.error("Error fetching location assets:", error);
+    return res.status(500).json({
+      message: "Failed to fetch location assets",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/assets/{assetId}/software-links:
+ *   post:
+ *     summary: Link software to a device
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: assetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               softwareAssetId:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Software linked successfully
+ */
+router.post("/:assetId/software-links", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const assetId = req.params.assetId;
+    const { softwareAssetId } = req.body;
+    const tenantId = req.user!.tenantId;
+
+    if (!softwareAssetId) {
+      return res.status(400).json({ message: "softwareAssetId is required" });
+    }
+
+    // Verify both assets exist and belong to the tenant
+    const [device] = await db.select()
+      .from(s.assets)
+      .where(and(
+        eq(s.assets.id, assetId),
+        eq(s.assets.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" });
+    }
+
+    const [software] = await db.select()
+      .from(s.assets)
+      .where(and(
+        eq(s.assets.id, softwareAssetId),
+        eq(s.assets.tenantId, tenantId),
+        eq(s.assets.type, "Software")
+      ))
+      .limit(1);
+
+    if (!software) {
+      return res.status(404).json({ message: "Software asset not found" });
+    }
+
+    // Check if link already exists
+    const [existing] = await db.select()
+      .from(s.assetSoftwareLinks)
+      .where(and(
+        eq(s.assetSoftwareLinks.assetId, assetId),
+        eq(s.assetSoftwareLinks.softwareAssetId, softwareAssetId)
+      ))
+      .limit(1);
+
+    if (existing) {
+      return res.status(409).json({ message: "Software already linked to this device" });
+    }
+
+    // Create the link
+    const [link] = await db.insert(s.assetSoftwareLinks)
+      .values({
+        assetId,
+        softwareAssetId,
+        linkedAt: new Date(),
+      })
+      .returning();
+
+    return res.status(201).json(link);
+  } catch (error: any) {
+    console.error("Error linking software to device:", error);
+    return res.status(500).json({
+      message: "Failed to link software to device",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/assets/{assetId}/software-links/{softwareAssetId}:
+ *   delete:
+ *     summary: Unlink software from a device
+ *     tags: [Assets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: assetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: softwareAssetId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Software unlinked successfully
+ */
+router.delete("/:assetId/software-links/:softwareAssetId", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const assetId = req.params.assetId;
+    const softwareAssetId = req.params.softwareAssetId;
+    const tenantId = req.user!.tenantId;
+
+    // Verify device belongs to tenant
+    const [device] = await db.select()
+      .from(s.assets)
+      .where(and(
+        eq(s.assets.id, assetId),
+        eq(s.assets.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" });
+    }
+
+    // Delete the link
+    const deleted = await db.delete(s.assetSoftwareLinks)
+      .where(and(
+        eq(s.assetSoftwareLinks.assetId, assetId),
+        eq(s.assetSoftwareLinks.softwareAssetId, softwareAssetId)
+      ))
+      .returning();
+
+    if (deleted.length === 0) {
+      return res.status(404).json({ message: "Software link not found" });
+    }
+
+    return res.json({ message: "Software unlinked successfully" });
+  } catch (error: any) {
+    console.error("Error unlinking software from device:", error);
+    return res.status(500).json({
+      message: "Failed to unlink software from device",
+      error: error.message
+    });
   }
 });
 
