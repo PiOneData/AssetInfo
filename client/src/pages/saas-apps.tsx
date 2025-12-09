@@ -34,13 +34,26 @@ type ApprovalStatus = typeof APPROVAL_STATUS_OPTIONS[number];
 type Category = typeof CATEGORY_OPTIONS[number];
 type ComplianceLevel = typeof COMPLIANCE_LEVEL_OPTIONS[number];
 
+// Custom URL validation that accepts modern TLDs like .ai, .io, .tech, etc.
+const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
+
 const saasAppSchema = z.object({
   name: z.string().min(1, "App name is required"),
   vendor: z.string().optional(),
   category: z.enum(CATEGORY_OPTIONS).optional(),
   approvalStatus: z.enum(APPROVAL_STATUS_OPTIONS).default("pending"),
   riskScore: z.number().min(0).max(100).default(0),
-  websiteUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+  websiteUrl: z.string()
+    .regex(urlPattern, "Invalid URL")
+    .transform((url) => {
+      // Automatically prepend https:// if no protocol is provided
+      if (url && !url.match(/^https?:\/\//i)) {
+        return `https://${url}`;
+      }
+      return url;
+    })
+    .optional()
+    .or(z.literal("")),
   description: z.string().optional(),
   primaryOwner: z.string().optional(),
   department: z.string().optional(),
