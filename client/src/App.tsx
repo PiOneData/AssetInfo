@@ -32,6 +32,9 @@ import DiscoveryDashboard from "@/pages/discovery-dashboard";
 import SpendDashboard from "@/pages/spend-dashboard";
 import AccessReviews from "@/pages/access-reviews";
 import AccessReviewDetail from "@/pages/access-review-detail";
+import RoleTemplates from "@/pages/role-templates";
+import PrivilegeDriftDetail from "@/pages/privilege-drift-detail";
+import OverprivilegedAccountDetail from "@/pages/overprivileged-account-detail";
 import AccessRequests from "@/pages/access-requests";
 import JitAccess from "@/pages/jit-access";
 import SodManagement from "@/pages/sod-management";
@@ -200,6 +203,21 @@ function Router() {
       <Route path="/access-reviews/:id">
         <ProtectedRoute requiredRole="admin">
           <AccessReviewDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/role-templates">
+        <ProtectedRoute requiredRole="admin">
+          <RoleTemplates />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/privilege-drift/:id">
+        <ProtectedRoute requiredRole="admin">
+          <PrivilegeDriftDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/overprivileged-accounts/:id">
+        <ProtectedRoute requiredRole="admin">
+          <OverprivilegedAccountDetail />
         </ProtectedRoute>
       </Route>
       <Route path="/access-requests">
