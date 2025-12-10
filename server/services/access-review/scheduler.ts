@@ -187,8 +187,33 @@ export class AccessReviewScheduler {
 
             // Check if campaign is overdue
             if (daysRemaining < 0) {
-              console.log(`[AccessReviewScheduler] Campaign ${campaign.id} is overdue`);
-              // TODO: Emit overdue event for policy automation
+              const daysOverdue = Math.abs(daysRemaining);
+              console.log(`[AccessReviewScheduler] Campaign ${campaign.id} is overdue by ${daysOverdue} days`);
+
+              // Escalate to managers at specific milestones (3, 7, 14 days overdue)
+              if (daysOverdue === 3 || daysOverdue === 7 || daysOverdue === 14) {
+                const engine = new AccessReviewCampaignEngine(tenant.id);
+                await engine.escalateOverdueReviews(campaign.id, daysOverdue);
+                console.log(`[AccessReviewScheduler] Escalated overdue reviews for campaign ${campaign.id}`);
+              }
+
+              // Auto-approve pending items if configured and significantly overdue (7+ days)
+              if (campaign.autoApproveOnTimeout && daysOverdue >= 7) {
+                const engine = new AccessReviewCampaignEngine(tenant.id);
+                await engine.autoApprovePendingItems(campaign.id);
+                console.log(`[AccessReviewScheduler] Auto-approved pending items for campaign ${campaign.id}`);
+              }
+
+              // Emit overdue event for policy automation
+              const { policyEngine } = await import('../policy/engine');
+              const eventSystem = policyEngine.getEventSystem();
+              eventSystem.emit('access_review.overdue', {
+                tenantId: tenant.id,
+                campaignId: campaign.id,
+                campaignName: campaign.name,
+                daysOverdue,
+                autoApproved: campaign.autoApproveOnTimeout && daysOverdue >= 7,
+              });
             }
           }
         } catch (error) {

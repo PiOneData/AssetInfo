@@ -184,6 +184,33 @@ router.post('/campaigns/:id/reminders', requireRole(['admin', 'compliance_manage
   }
 });
 
+/**
+ * GET /api/access-reviews/campaigns/:id/export/csv
+ * Export campaign report as CSV for auditors
+ */
+router.get('/campaigns/:id/export/csv', requireRole(['admin', 'compliance_manager', 'auditor']), async (req, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const { id } = req.params;
+
+    const engine = new AccessReviewCampaignEngine(tenantId);
+    const csv = await engine.exportCampaignCSV(id);
+
+    // Get campaign name for filename
+    const campaign = await storage.getAccessReviewCampaign(id, tenantId);
+    const filename = campaign
+      ? `access-review-${campaign.name.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`
+      : `access-review-${id}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting campaign CSV:', error);
+    res.status(500).json({ error: 'Failed to export campaign' });
+  }
+});
+
 // ============================================
 // Access Review Items & Decisions
 // ============================================

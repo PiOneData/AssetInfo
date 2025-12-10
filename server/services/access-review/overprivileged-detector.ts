@@ -133,11 +133,20 @@ export class OverprivilegedAccountDetector {
       return !this.isAppRelevantToDepartment(a.appCategory, user.department);
     });
 
+    // Detect long-running admin privileges (> 1 year without review)
+    const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    const longRunningAdminApps = adminApps.filter(a => {
+      if (!a.grantedAt) return false;
+      const grantedTime = new Date(a.grantedAt).getTime();
+      return grantedTime < oneYearAgo;
+    });
+
     // Calculate risk score
     const { score, riskLevel, factors } = this.calculateOverprivilegedRisk(
       adminApps.length,
       staleAdminApps.length,
-      crossDeptAdminApps.length
+      crossDeptAdminApps.length,
+      longRunningAdminApps.length
     );
 
     // Get recommended action
@@ -188,7 +197,8 @@ export class OverprivilegedAccountDetector {
   private calculateOverprivilegedRisk(
     adminAppCount: number,
     staleAdminCount: number,
-    crossDeptAdminCount: number
+    crossDeptAdminCount: number,
+    longRunningAdminCount: number
   ): { score: number; riskLevel: string; factors: string[] } {
     let score = 0;
     const factors: string[] = [];
@@ -215,6 +225,12 @@ export class OverprivilegedAccountDetector {
     if (crossDeptAdminCount > 0) {
       score += crossDeptAdminCount * 15;
       factors.push(`${crossDeptAdminCount} cross-department admin access${crossDeptAdminCount > 1 ? 'es' : ''}`);
+    }
+
+    // Long-running admin privileges (> 1 year)
+    if (longRunningAdminCount > 0) {
+      score += longRunningAdminCount * 12;
+      factors.push(`${longRunningAdminCount} long-running admin privilege${longRunningAdminCount > 1 ? 's' : ''} (> 1 year)`);
     }
 
     // Cap at 100
