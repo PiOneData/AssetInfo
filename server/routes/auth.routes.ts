@@ -303,4 +303,24 @@ router.get("/verify", authenticateToken, async (req: Request, res: Response) => 
   });
 });
 
+/**
+ * GET /api/setup/status
+ * Check if initial setup is required
+ */
+router.get("/setup/status", async (req: Request, res: Response) => {
+  try {
+    // Check if any tenants exist to determine if setup is needed  
+    const tenants = await storage.getTenants();
+    const setupComplete = tenants.length > 0;
+    
+    res.json({
+      setupComplete,
+      requiresSetup: !setupComplete
+    });
+  } catch (error) {
+    console.error("Error checking setup status:", error);
+    res.status(500).json({ message: "Failed to check setup status" });
+  }
+});
+
 export default router;

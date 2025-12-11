@@ -41,17 +41,7 @@ export const corsMiddleware = cors({
  * Protects against common web vulnerabilities
  */
 export const helmetMiddleware = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Required for React dev
-      connectSrc: ["'self'"],
-      frameSrc: ["'self'"],
-    },
-  },
+  contentSecurityPolicy: false, // Temporarily disable CSP for debugging
   crossOriginEmbedderPolicy: false, // Required for some map libraries
   crossOriginResourcePolicy: { policy: "cross-origin" },
 });
@@ -102,7 +92,7 @@ export const sensitiveOperationLimiter = rateLimit({
  * Compresses HTTP responses for better performance
  */
 export const compressionMiddleware = compression({
-  filter: (req, res) => {
+  filter: (req: Request, res: Response) => {
     if (req.headers["x-no-compression"]) {
       return false;
     }
