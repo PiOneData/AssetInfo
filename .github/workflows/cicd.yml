@@ -76,6 +76,7 @@ jobs:
               -e OA_USERNAME=${{ secrets.OA_USERNAME }} \
               -e OA_PASSWORD=${{ secrets.OA_PASSWORD }} \
               -e PUBLIC_URL=${{ secrets.PUBLIC_URL }} \
+              -e PRODUCTION_URL=${{ secrets.PUBLIC_URL }} \
               -e AGENT_ENROLL_URL=${{ secrets.AGENT_ENROLL_URL }} \
               -p 5926:5926 \
               --restart unless-stopped \
