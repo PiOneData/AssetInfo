@@ -34,7 +34,8 @@ import {
   Calendar,
   Network,
   Cloud,
-  DollarSign
+  DollarSign,
+  Briefcase
 } from "lucide-react";
 
 const navigation = [
@@ -65,6 +66,7 @@ const navigation = [
       { name: "Identity Providers", href: "/identity-providers", icon: Shield, requiredRole: "admin" },
       { name: "Policies", href: "/governance-policies", icon: Shield, requiredRole: "admin" },
       { name: "Access Reviews", href: "/access-reviews", icon: ShieldCheck, requiredRole: "admin" },
+      { name: "Role Templates", href: "/role-templates", icon: Briefcase, requiredRole: "admin" },
     ]
   },
   { name: "Reports", href: "/reports", icon: BarChart3, requiredRole: "it-manager" },
