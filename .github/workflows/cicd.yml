@@ -80,4 +80,4 @@ jobs:
               -p 5926:5926 \
               --restart unless-stopped \
               $APP_IMAGE
-            echo "✅ Deployment successful!"
+            echo "✅ Deployment successful!!"
